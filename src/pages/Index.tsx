@@ -8,10 +8,20 @@ import { LiveStatus } from "@/components/marketplace/LiveStatus";
 import { BookingsList } from "@/components/marketplace/BookingsList";
 import { PartnerDashboard } from "@/components/marketplace/PartnerDashboard";
 import { ProfileView } from "@/components/marketplace/ProfileView";
+import { MatchingList } from "@/components/marketplace/MatchingList";
+import { NotificationsView } from "@/components/marketplace/NotificationsView";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
   const { view, role } = useApp();
+
+  if (view.name === "notifications") {
+    return (
+      <AppShell title="Notifications" subtitle="Updates on your bookings">
+        <NotificationsView />
+      </AppShell>
+    );
+  }
 
   if (role === "partner") {
     switch (view.name) {
@@ -29,7 +39,7 @@ const Router = () => {
         );
       default:
         return (
-          <AppShell title="Partner Hub" subtitle="Manage your jobs">
+          <AppShell title="Partner Hub" subtitle="Manage your availability">
             <PartnerDashboard />
           </AppShell>
         );
@@ -63,6 +73,12 @@ const Router = () => {
       return (
         <AppShell title="Book Service" subtitle="Choose how & when">
           <BookingFlow serviceId={view.serviceId} />
+        </AppShell>
+      );
+    case "matching":
+      return (
+        <AppShell title="Matching Partners" subtitle="Pick the partner you want">
+          <MatchingList bookingId={view.bookingId} />
         </AppShell>
       );
     case "live-status":
