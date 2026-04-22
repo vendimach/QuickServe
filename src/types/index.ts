@@ -4,10 +4,12 @@ export type BookingType = "instant" | "scheduled";
 
 export type BookingStatus =
   | "searching"
+  | "awaiting-customer-confirm"
   | "confirmed"
   | "in-progress"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "refunded";
 
 export interface Service {
   id: string;
@@ -36,6 +38,10 @@ export interface Professional {
   jobs: number;
   avatar: string;
   eta: string;
+  categoryIds?: string[];
+  availableNow?: boolean;
+  listedToday?: boolean;
+  distance?: string;
 }
 
 export interface Booking {
@@ -47,6 +53,7 @@ export interface Booking {
   createdAt: Date;
   professional?: Professional;
   address: string;
+  acceptedBy?: Professional[];
 }
 
 export interface PartnerRequest {
