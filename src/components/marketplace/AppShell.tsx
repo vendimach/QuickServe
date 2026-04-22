@@ -1,8 +1,10 @@
 import { ReactNode } from "react";
-import { Home, Calendar, User, Briefcase, Bell } from "lucide-react";
+import { Home, Calendar, User, Briefcase, Bell, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
-import { RoleToggle } from "./RoleToggle";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 interface AppShellProps {
   children: ReactNode;
@@ -13,6 +15,9 @@ interface AppShellProps {
 
 export const AppShell = ({ children, title, subtitle, showHeader = true }: AppShellProps) => {
   const { role, view, navigate } = useApp();
+  const { profile } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const { unreadCount } = useNotifications();
 
   const customerTabs = [
     { name: "Home", icon: Home, view: { name: "home" as const } },
@@ -26,6 +31,8 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
     { name: "Profile", icon: User, view: { name: "profile" as const } },
   ];
 
+  const greeting = profile?.full_name?.split(" ")[0] ?? (role === "partner" ? "Partner" : "there");
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-md flex-col bg-background shadow-elevated md:my-4 md:min-h-[calc(100vh-2rem)] md:rounded-3xl md:overflow-hidden">
@@ -34,22 +41,34 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider opacity-80">
-                  {role === "customer" ? "Hello there 👋" : "Service Partner"}
+                  {role === "customer" ? `Hi ${greeting} 👋` : "Service Partner"}
                 </p>
                 <h1 className="text-xl font-bold">{title ?? "QuickServe"}</h1>
                 {subtitle && (
                   <p className="mt-0.5 text-sm opacity-90">{subtitle}</p>
                 )}
               </div>
-              <button
-                aria-label="Notifications"
-                className="rounded-full bg-white/15 p-2.5 backdrop-blur-sm transition-smooth hover:bg-white/25"
-              >
-                <Bell className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mt-5 flex justify-center">
-              <RoleToggle />
+              <div className="flex items-center gap-2">
+                <button
+                  aria-label="Toggle theme"
+                  onClick={toggleTheme}
+                  className="rounded-full bg-white/15 p-2.5 backdrop-blur-sm transition-smooth hover:bg-white/25"
+                >
+                  {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                </button>
+                <button
+                  aria-label="Notifications"
+                  onClick={() => navigate({ name: "notifications" })}
+                  className="relative rounded-full bg-white/15 p-2.5 backdrop-blur-sm transition-smooth hover:bg-white/25"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-accent-foreground">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </header>
         )}
