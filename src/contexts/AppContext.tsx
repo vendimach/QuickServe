@@ -9,6 +9,7 @@ type View =
   | { name: "booking-flow"; serviceId: string }
   | { name: "live-status"; bookingId: string }
   | { name: "bookings" }
+  | { name: "profile" }
   | { name: "partner-dashboard" };
 
 interface AppContextValue {
