@@ -1,9 +1,9 @@
-import { Search, MapPin, ChevronRight, Sparkles, Wrench, Scissors, Refrigerator, Star } from "lucide-react";
+import { Search, MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star } from "lucide-react";
 import { categories, services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 
-const iconMap = { Sparkles, Wrench, Scissors, Refrigerator };
+const iconMap = { Sparkles, HeartPulse, Baby, PawPrint };
 const colorMap: Record<string, string> = {
   primary: "bg-primary/10 text-primary",
   accent: "bg-accent/10 text-accent",
