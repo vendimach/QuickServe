@@ -7,17 +7,33 @@ import { BookingFlow } from "@/components/marketplace/BookingFlow";
 import { LiveStatus } from "@/components/marketplace/LiveStatus";
 import { BookingsList } from "@/components/marketplace/BookingsList";
 import { PartnerDashboard } from "@/components/marketplace/PartnerDashboard";
+import { ProfileView } from "@/components/marketplace/ProfileView";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
   const { view, role } = useApp();
 
   if (role === "partner") {
-    return (
-      <AppShell title="Partner Hub" subtitle="Manage your jobs">
-        <PartnerDashboard />
-      </AppShell>
-    );
+    switch (view.name) {
+      case "bookings":
+        return (
+          <AppShell title="My Jobs" subtitle="Scheduled, completed & more">
+            <BookingsList />
+          </AppShell>
+        );
+      case "profile":
+        return (
+          <AppShell title="My Profile" subtitle="Account & verification">
+            <ProfileView />
+          </AppShell>
+        );
+      default:
+        return (
+          <AppShell title="Partner Hub" subtitle="Manage your jobs">
+            <PartnerDashboard />
+          </AppShell>
+        );
+    }
   }
 
   switch (view.name) {
@@ -59,6 +75,12 @@ const Router = () => {
       return (
         <AppShell title="My Bookings" subtitle="All your service requests">
           <BookingsList />
+        </AppShell>
+      );
+    case "profile":
+      return (
+        <AppShell title="My Profile" subtitle="Account & preferences">
+          <ProfileView />
         </AppShell>
       );
     default:
