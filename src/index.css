@@ -8,35 +8,56 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 40% 98%;
+    --foreground: 200 30% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 200 30% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 200 30% 12%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 174 72% 38%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 174 80% 55%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 200 25% 95%;
+    --secondary-foreground: 200 30% 12%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 200 20% 94%;
+    --muted-foreground: 200 12% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 14 90% 60%;
+    --accent-foreground: 0 0% 100%;
+    --accent-glow: 18 95% 68%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --success: 145 65% 42%;
+    --success-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --warning: 38 95% 55%;
+    --warning-foreground: 200 30% 12%;
 
-    --radius: 0.5rem;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 200 20% 90%;
+    --input: 200 20% 90%;
+    --ring: 174 72% 38%;
+
+    --radius: 1rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(174 72% 38%), hsl(186 80% 48%));
+    --gradient-accent: linear-gradient(135deg, hsl(14 90% 60%), hsl(28 95% 62%));
+    --gradient-hero: linear-gradient(160deg, hsl(174 72% 38%) 0%, hsl(186 78% 45%) 50%, hsl(200 75% 50%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(200 30% 98%) 100%);
+
+    --shadow-soft: 0 2px 12px -2px hsl(200 30% 20% / 0.08);
+    --shadow-card: 0 8px 24px -8px hsl(200 30% 20% / 0.12);
+    --shadow-elevated: 0 16px 40px -12px hsl(174 50% 30% / 0.25);
+    --shadow-glow: 0 0 32px hsl(174 80% 55% / 0.4);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 
     --sidebar-background: 0 0% 98%;
 
@@ -101,5 +122,39 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+  .transition-bounce {
+    transition: var(--transition-bounce);
   }
 }
