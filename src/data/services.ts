@@ -123,9 +123,12 @@ export const services: Service[] = [
 ];
 
 export const professionals: Professional[] = [
-  { id: "p1", name: "Rahul Verma", rating: 4.9, jobs: 1240, avatar: "RV", eta: "8 min" },
-  { id: "p2", name: "Priya Sharma", rating: 4.8, jobs: 980, avatar: "PS", eta: "12 min" },
-  { id: "p3", name: "Amit Kumar", rating: 4.9, jobs: 1530, avatar: "AK", eta: "5 min" },
+  { id: "p1", name: "Rahul Verma", rating: 4.9, jobs: 1240, avatar: "RV", eta: "8 min", categoryIds: ["elder-care", "housemaid"], availableNow: true, listedToday: true, distance: "1.2 km" },
+  { id: "p2", name: "Priya Sharma", rating: 4.8, jobs: 980, avatar: "PS", eta: "12 min", categoryIds: ["babysitter", "elder-care"], availableNow: true, listedToday: true, distance: "2.4 km" },
+  { id: "p3", name: "Amit Kumar", rating: 4.9, jobs: 1530, avatar: "AK", eta: "5 min", categoryIds: ["pet-care", "housemaid"], availableNow: true, listedToday: true, distance: "0.8 km" },
+  { id: "p4", name: "Neha Singh", rating: 4.7, jobs: 720, avatar: "NS", eta: "15 min", categoryIds: ["babysitter"], availableNow: false, listedToday: true, distance: "3.1 km" },
+  { id: "p5", name: "Karan Mehta", rating: 4.8, jobs: 2100, avatar: "KM", eta: "10 min", categoryIds: ["housemaid", "pet-care"], availableNow: true, listedToday: true, distance: "1.9 km" },
+  { id: "p6", name: "Suman Rao", rating: 4.9, jobs: 1840, avatar: "SR", eta: "20 min", categoryIds: ["elder-care"], availableNow: false, listedToday: true, distance: "4.0 km" },
 ];
 
 export const samplePartnerRequests: PartnerRequest[] = [

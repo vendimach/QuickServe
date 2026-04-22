@@ -1,46 +1,84 @@
-import { useState } from "react";
-import { MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase } from "lucide-react";
-import { samplePartnerRequests } from "@/data/services";
+import { useEffect, useState } from "react";
+import { MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye } from "lucide-react";
+import { samplePartnerRequests, professionals } from "@/data/services";
 import type { PartnerRequest } from "@/types";
+import { useApp } from "@/contexts/AppContext";
+import { useNotifications } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
 
 export const PartnerDashboard = () => {
-  const [online, setOnline] = useState(true);
+  const { availableNow, setAvailableNow, listedToday, setListedToday, bookings } = useApp();
+  const { push } = useNotifications();
   const [requests, setRequests] = useState<PartnerRequest[]>(samplePartnerRequests);
   const [accepted, setAccepted] = useState<PartnerRequest[]>([]);
+
+  // Notify partner when one of their accepted bookings is confirmed by the customer
+  useEffect(() => {
+    const confirmed = bookings.find(
+      (b) => b.status === "confirmed" && b.professional?.id === professionals[0].id,
+    );
+    if (confirmed) {
+      // No-op duplicate suppression; just illustrative
+    }
+  }, [bookings]);
 
   const respond = (id: string, action: "accept" | "decline") => {
     const req = requests.find((r) => r.id === id);
     if (!req) return;
     setRequests((prev) => prev.filter((r) => r.id !== id));
-    if (action === "accept") setAccepted((prev) => [req, ...prev]);
+    if (action === "accept") {
+      setAccepted((prev) => [req, ...prev]);
+      push({
+        kind: "success",
+        title: "Job accepted",
+        body: `${req.serviceName} • Waiting for customer to confirm`,
+      });
+      // Simulate customer confirming after a short delay
+      setTimeout(() => {
+        push({
+          kind: "confirm",
+          title: "Customer confirmed!",
+          body: `${req.customerName} chose you for ${req.serviceName}`,
+        });
+      }, 3500);
+    } else {
+      push({ kind: "info", title: "Request declined" });
+    }
   };
 
   return (
     <div className="-mt-5 space-y-5 px-5 pb-6">
-      {/* Online toggle */}
-      <div className="rounded-2xl bg-card p-4 shadow-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">You are</p>
-            <p className="text-base font-bold text-foreground">{online ? "Online & Available" : "Offline"}</p>
-          </div>
-          <button
-            onClick={() => setOnline((o) => !o)}
-            className={cn(
-              "relative h-7 w-12 rounded-full transition-smooth",
-              online ? "bg-success shadow-glow" : "bg-muted",
-            )}
-            aria-pressed={online}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 h-6 w-6 rounded-full bg-card shadow-soft transition-bounce",
-                online ? "left-[1.375rem]" : "left-0.5",
-              )}
-            />
-          </button>
-        </div>
+      {/* Two availability switches */}
+      <div className="rounded-2xl bg-card p-4 shadow-card space-y-3">
+        <SwitchRow
+          icon={<Zap className="h-4 w-4" />}
+          title="Available right now"
+          subtitle="Get instant booking requests live"
+          on={availableNow}
+          onChange={(v) => {
+            setAvailableNow(v);
+            push({
+              kind: v ? "success" : "info",
+              title: v ? "You're live for instant bookings" : "Instant matching paused",
+            });
+          }}
+          color="success"
+        />
+        <div className="border-t border-border" />
+        <SwitchRow
+          icon={<Eye className="h-4 w-4" />}
+          title="Show in today's listings"
+          subtitle="Customers can see & book you for today"
+          on={listedToday}
+          onChange={(v) => {
+            setListedToday(v);
+            push({
+              kind: v ? "success" : "info",
+              title: v ? "You're listed for today" : "Removed from today's list",
+            });
+          }}
+          color="primary"
+        />
       </div>
 
       {/* Stats */}
@@ -71,9 +109,9 @@ export const PartnerDashboard = () => {
             {requests.length} new
           </span>
         </div>
-        {!online ? (
+        {!availableNow && !listedToday ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
-            <p className="text-xs text-muted-foreground">Go online to receive job requests</p>
+            <p className="text-xs text-muted-foreground">Turn on availability to receive job requests</p>
           </div>
         ) : requests.length === 0 ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
@@ -128,14 +166,13 @@ export const PartnerDashboard = () => {
         )}
       </section>
 
-      {/* Accepted jobs */}
       {accepted.length > 0 && (
         <section>
-          <h2 className="mb-3 text-base font-bold text-foreground">Active Jobs</h2>
+          <h2 className="mb-3 text-base font-bold text-foreground">Awaiting Customer Confirmation</h2>
           <div className="space-y-3">
             {accepted.map((j) => (
               <div key={j.id} className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-soft">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/15 text-success">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/15 text-warning">
                   <Briefcase className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
@@ -151,3 +188,44 @@ export const PartnerDashboard = () => {
     </div>
   );
 };
+
+interface SwitchRowProps {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+  color: "success" | "primary";
+}
+
+const SwitchRow = ({ icon, title, subtitle, on, onChange, color }: SwitchRowProps) => (
+  <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center gap-3 min-w-0">
+      <div className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+        color === "success" ? "bg-success/15 text-success" : "bg-primary/15 text-primary",
+      )}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-foreground">{title}</p>
+        <p className="text-[11px] text-muted-foreground">{subtitle}</p>
+      </div>
+    </div>
+    <button
+      onClick={() => onChange(!on)}
+      aria-pressed={on}
+      className={cn(
+        "relative h-7 w-12 shrink-0 rounded-full transition-smooth",
+        on ? (color === "success" ? "bg-success shadow-glow" : "bg-primary shadow-glow") : "bg-muted",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 h-6 w-6 rounded-full bg-card shadow-soft transition-bounce",
+          on ? "left-[1.375rem]" : "left-0.5",
+        )}
+      />
+    </button>
+  </div>
+);

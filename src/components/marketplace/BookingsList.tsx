@@ -19,13 +19,12 @@ export const BookingsList = () => {
   const filtered = useMemo(() => {
     if (active === "scheduled") {
       return bookings.filter((b) =>
-        ["searching", "confirmed", "in-progress"].includes(b.status),
+        ["searching", "awaiting-customer-confirm", "confirmed", "in-progress"].includes(b.status),
       );
     }
     if (active === "completed") return bookings.filter((b) => b.status === "completed");
     if (active === "cancelled") return bookings.filter((b) => b.status === "cancelled");
-    // refunds: cancelled bookings with refund eligible (mock: any cancelled)
-    return bookings.filter((b) => b.status === "cancelled");
+    return bookings.filter((b) => b.status === "refunded" || b.status === "cancelled");
   }, [bookings, active]);
 
   return (
@@ -83,22 +82,32 @@ export const BookingsList = () => {
           {filtered.map((b) => {
             const statusStyles: Record<string, string> = {
               searching: "bg-warning/15 text-warning",
+              "awaiting-customer-confirm": "bg-warning/15 text-warning",
               confirmed: "bg-success/15 text-success",
               "in-progress": "bg-primary/15 text-primary",
               completed: "bg-muted text-muted-foreground",
               cancelled: "bg-destructive/15 text-destructive",
+              refunded: "bg-success/15 text-success",
             };
             const labels: Record<string, string> = {
               searching: "Searching",
+              "awaiting-customer-confirm": "Choose Partner",
               confirmed: "Confirmed",
               "in-progress": "In Progress",
               completed: "Completed",
               cancelled: "Cancelled",
+              refunded: "Refunded",
             };
             return (
               <button
                 key={b.id}
-                onClick={() => navigate({ name: "live-status", bookingId: b.id })}
+                onClick={() => {
+                  if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
+                    navigate({ name: "matching", bookingId: b.id });
+                  } else {
+                    navigate({ name: "live-status", bookingId: b.id });
+                  }
+                }}
                 className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-soft transition-smooth hover:shadow-card"
               >
                 <div className={cn(

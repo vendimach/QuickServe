@@ -36,7 +36,7 @@ export const BookingFlow = ({ serviceId }: Props) => {
       scheduledAt.setHours(hour, parseInt(mPart), 0, 0);
     }
     const booking = createBooking(service, mode, scheduledAt);
-    navigate({ name: "live-status", bookingId: booking.id });
+    navigate({ name: "matching", bookingId: booking.id });
   };
 
   return (
