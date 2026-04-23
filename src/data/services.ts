@@ -1,4 +1,4 @@
-import type { Category, Service, Professional, PartnerRequest } from "@/types";
+import type { Category, Service, Professional, PartnerRequest, Review } from "@/types";
 
 export const categories: Category[] = [
   {
@@ -123,13 +123,90 @@ export const services: Service[] = [
 ];
 
 export const professionals: Professional[] = [
-  { id: "p1", name: "Rahul Verma", rating: 4.9, jobs: 1240, avatar: "RV", eta: "8 min", categoryIds: ["elder-care", "housemaid"], availableNow: true, listedToday: true, distance: "1.2 km" },
-  { id: "p2", name: "Priya Sharma", rating: 4.8, jobs: 980, avatar: "PS", eta: "12 min", categoryIds: ["babysitter", "elder-care"], availableNow: true, listedToday: true, distance: "2.4 km" },
-  { id: "p3", name: "Amit Kumar", rating: 4.9, jobs: 1530, avatar: "AK", eta: "5 min", categoryIds: ["pet-care", "housemaid"], availableNow: true, listedToday: true, distance: "0.8 km" },
-  { id: "p4", name: "Neha Singh", rating: 4.7, jobs: 720, avatar: "NS", eta: "15 min", categoryIds: ["babysitter"], availableNow: false, listedToday: true, distance: "3.1 km" },
-  { id: "p5", name: "Karan Mehta", rating: 4.8, jobs: 2100, avatar: "KM", eta: "10 min", categoryIds: ["housemaid", "pet-care"], availableNow: true, listedToday: true, distance: "1.9 km" },
-  { id: "p6", name: "Suman Rao", rating: 4.9, jobs: 1840, avatar: "SR", eta: "20 min", categoryIds: ["elder-care"], availableNow: false, listedToday: true, distance: "4.0 km" },
+  {
+    id: "p1", name: "Rahul Verma", rating: 4.9, jobs: 1240, avatar: "RV", eta: "8 min",
+    categoryIds: ["elder-care", "housemaid"], availableNow: true, listedToday: true, distance: "1.2 km",
+    bio: "8 yrs caring for seniors. First-aid certified.",
+    schedule: [{ days: ["Mon","Wed","Fri"], start: "08:00", end: "14:00" }, { days: ["Tue","Thu"], start: "17:00", end: "22:00" }],
+  },
+  {
+    id: "p2", name: "Priya Sharma", rating: 4.8, jobs: 980, avatar: "PS", eta: "12 min",
+    categoryIds: ["babysitter", "elder-care"], availableNow: true, listedToday: true, distance: "2.4 km",
+    bio: "Loving nanny — 5 yrs with toddlers.",
+    schedule: [{ days: ["Mon","Tue","Wed","Thu","Fri"], start: "09:00", end: "18:00" }],
+  },
+  {
+    id: "p3", name: "Amit Kumar", rating: 4.9, jobs: 1530, avatar: "AK", eta: "5 min",
+    categoryIds: ["pet-care", "housemaid"], availableNow: true, listedToday: true, distance: "0.8 km",
+    bio: "Pet handler & home cleaner.",
+    schedule: [{ days: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], start: "06:00", end: "20:00" }],
+  },
+  {
+    id: "p4", name: "Neha Singh", rating: 4.7, jobs: 720, avatar: "NS", eta: "15 min",
+    categoryIds: ["babysitter"], availableNow: false, listedToday: true, distance: "3.1 km",
+    bio: "Evening sitter, fluent in 3 languages.",
+    schedule: [{ days: ["Mon","Wed","Fri"], start: "17:00", end: "22:00" }],
+  },
+  {
+    id: "p5", name: "Karan Mehta", rating: 4.8, jobs: 2100, avatar: "KM", eta: "10 min",
+    categoryIds: ["housemaid", "pet-care"], availableNow: true, listedToday: true, distance: "1.9 km",
+    bio: "Deep cleaning specialist.",
+    schedule: [{ days: ["Tue","Thu","Sat"], start: "10:00", end: "19:00" }],
+  },
+  {
+    id: "p6", name: "Suman Rao", rating: 4.9, jobs: 1840, avatar: "SR", eta: "20 min",
+    categoryIds: ["elder-care"], availableNow: false, listedToday: true, distance: "4.0 km",
+    bio: "Trained caregiver for elderly with mobility needs.",
+    schedule: [{ days: ["Mon","Tue","Wed","Thu","Fri"], start: "08:00", end: "16:00" }],
+  },
 ];
+
+export const seedReviews: Review[] = [
+  { id: "rv1", professionalId: "p1", bookingId: "seed", rating: 5, comment: "Very gentle with my grandmother. On time and respectful.", customerName: "Ananya G.", createdAt: new Date(Date.now() - 86400000 * 3), tags: ["Punctual", "Polite"] },
+  { id: "rv2", professionalId: "p1", bookingId: "seed", rating: 5, comment: "Highly recommend Rahul.", customerName: "Vikram S.", createdAt: new Date(Date.now() - 86400000 * 10), tags: ["Caring"] },
+  { id: "rv3", professionalId: "p2", bookingId: "seed", rating: 5, comment: "My toddler loved her!", customerName: "Meera K.", createdAt: new Date(Date.now() - 86400000 * 5), tags: ["Friendly", "Patient"] },
+  { id: "rv4", professionalId: "p3", bookingId: "seed", rating: 5, comment: "My dog was so happy after the walk.", customerName: "Sneha P.", createdAt: new Date(Date.now() - 86400000 * 2), tags: ["Caring"] },
+  { id: "rv5", professionalId: "p5", bookingId: "seed", rating: 4, comment: "Great deep cleaning, will book again.", customerName: "Rohan M.", createdAt: new Date(Date.now() - 86400000 * 7), tags: ["Thorough"] },
+];
+
+export const cancellationPolicy = {
+  beforeAcceptFee: 0,
+  afterAcceptFee: 50,
+  withinArrivalFee: 150,
+  rules: [
+    "Free cancellation before a partner accepts your request.",
+    "₹50 fine if cancelled after a partner accepts.",
+    "₹150 fine if cancelled within 15 minutes of partner arrival.",
+    "No fine if cancelled by partner or due to genuine emergencies.",
+  ],
+};
+
+export const safetyInstructions: Record<string, string[]> = {
+  "elder-care": [
+    "Keep medication labels clearly visible.",
+    "Lock away expensive jewellery & cash.",
+    "Share emergency contact numbers with the caregiver.",
+    "Keep walkways clear to prevent falls.",
+  ],
+  babysitter: [
+    "Lock all almirahs & drawers with valuables.",
+    "Keep childproof gates in place near stairs.",
+    "Share allergy and food preference details.",
+    "Keep emergency contacts on the fridge.",
+  ],
+  housemaid: [
+    "Lock shelves and cabinets containing valuables.",
+    "Stow away expensive electronics & jewellery.",
+    "Inform about any fragile items in advance.",
+    "Keep cleaning chemicals out of pet/child reach.",
+  ],
+  "pet-care": [
+    "Share leash, food & medication clearly.",
+    "Inform about pet allergies or behaviour quirks.",
+    "Lock cabinets — pets are curious!",
+    "Keep vet contact details handy.",
+  ],
+};
 
 export const samplePartnerRequests: PartnerRequest[] = [
   {

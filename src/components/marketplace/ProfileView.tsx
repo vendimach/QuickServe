@@ -14,16 +14,21 @@ import {
   Moon,
   Sun,
   LogOut,
+  Headphones,
+  MessageCircle,
+  HelpCircle,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useNotifications } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
 
 export const ProfileView = () => {
   const { role } = useApp();
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { push } = useNotifications();
 
   const name = profile?.full_name ?? "Guest";
   const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -73,6 +78,37 @@ export const ProfileView = () => {
       label: "About Us",
       value: "Version 1.0.0",
       iconColor: "bg-muted text-muted-foreground",
+    },
+  ] as const;
+
+  const supportRows = [
+    {
+      icon: Headphones,
+      label: "Customer Care",
+      value: "+91 1800-123-456 • 24×7",
+      action: () => window.open("tel:+911800123456"),
+      iconColor: "bg-success/15 text-success",
+    },
+    {
+      icon: Mail,
+      label: "Email Support",
+      value: "support@quickserve.app",
+      action: () => window.open("mailto:support@quickserve.app"),
+      iconColor: "bg-primary/10 text-primary",
+    },
+    {
+      icon: MessageCircle,
+      label: "Contact Us",
+      value: "Send a message",
+      action: () => push({ kind: "info", title: "Message sent", body: "We'll reply within 24h." }),
+      iconColor: "bg-accent/10 text-accent",
+    },
+    {
+      icon: HelpCircle,
+      label: "FAQs & Help",
+      value: "Tap the AI bubble for instant help",
+      action: () => push({ kind: "info", title: "Tip", body: "Use the floating AI bubble bottom-right." }),
+      iconColor: "bg-warning/15 text-warning",
     },
   ] as const;
 
@@ -147,6 +183,36 @@ export const ProfileView = () => {
             </button>
           );
         })}
+      </div>
+
+      <div>
+        <p className="mb-2 px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Help & Support
+        </p>
+        <div className="overflow-hidden rounded-2xl bg-card shadow-soft">
+          {supportRows.map((r, i) => {
+            const Icon = r.icon;
+            return (
+              <button
+                key={r.label}
+                onClick={r.action}
+                className={cn(
+                  "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-smooth hover:bg-secondary/50",
+                  i !== supportRows.length - 1 && "border-b border-border",
+                )}
+              >
+                <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl", r.iconColor)}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{r.label}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{r.value}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <button

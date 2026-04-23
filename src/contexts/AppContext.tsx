@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import type { Booking, Role, Service, BookingType, Professional } from "@/types";
+import type { Booking, Role, Service, BookingType, Professional, ServicePreferences } from "@/types";
 import { professionals as allPros } from "@/data/services";
 import { useAuth } from "./AuthContext";
 import { useNotifications } from "./NotificationContext";
@@ -14,7 +14,11 @@ type View =
   | { name: "bookings" }
   | { name: "profile" }
   | { name: "notifications" }
-  | { name: "partner-dashboard" };
+  | { name: "partner-dashboard" }
+  | { name: "rate-booking"; bookingId: string }
+  | { name: "partner-profile"; partnerId: string }
+  | { name: "chat"; bookingId: string }
+  | { name: "live-cam"; bookingId: string };
 
 interface AppContextValue {
   role: Role;
@@ -26,10 +30,13 @@ interface AppContextValue {
     type: BookingType,
     scheduledAt?: Date,
     initialPro?: Professional,
+    preferences?: ServicePreferences,
   ) => Booking;
   partnerAcceptBooking: (bookingId: string, professional: Professional) => void;
   customerConfirmPartner: (bookingId: string, professional: Professional) => void;
   cancelBooking: (bookingId: string) => void;
+  completeBooking: (bookingId: string) => void;
+  markRated: (bookingId: string) => void;
   // partner availability
   availableNow: boolean;
   setAvailableNow: (v: boolean) => void;
@@ -58,6 +65,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     type,
     scheduledAt,
     initialPro,
+    preferences,
   ) => {
     const booking: Booking = {
       id: `b-${Date.now()}`,
@@ -69,6 +77,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       address: "Home — 12, MG Road, Bengaluru",
       acceptedBy: type === "scheduled" && initialPro ? [initialPro] : [],
       professional: undefined,
+      preferences,
     };
     setBookings((prev) => [booking, ...prev]);
     push({
@@ -116,7 +125,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const customerConfirmPartner: AppContextValue["customerConfirmPartner"] = (bookingId, professional) => {
     setBookings((prev) =>
       prev.map((b) =>
-        b.id === bookingId ? { ...b, professional, status: "confirmed" } : b,
+        b.id === bookingId
+          ? { ...b, professional, status: "confirmed", confirmedAt: new Date() }
+          : b,
       ),
     );
     push({
@@ -124,6 +135,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       title: "Booking confirmed",
       body: `${professional.name} will arrive in ${professional.eta}`,
     });
+
+    // Simulate partner arrival after their ETA (compressed for demo)
+    const etaMinutes = parseInt(professional.eta) || 8;
+    const arriveMs = Math.min(etaMinutes, 1) * 1000 * 30; // 30s per minute, capped
+    setTimeout(() => {
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId
+            ? { ...b, status: "in-progress", arrivedAt: new Date() }
+            : b,
+        ),
+      );
+      push({
+        kind: "success",
+        title: `${professional.name} has arrived`,
+        body: "Live cam is now available",
+      });
+    }, Math.max(arriveMs, 8000));
   };
 
   const cancelBooking: AppContextValue["cancelBooking"] = (bookingId) => {
@@ -131,6 +160,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       prev.map((b) => (b.id === bookingId ? { ...b, status: "cancelled" } : b)),
     );
     push({ kind: "warning", title: "Booking cancelled" });
+  };
+
+  const completeBooking: AppContextValue["completeBooking"] = (bookingId) => {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, status: "completed" } : b)),
+    );
+    push({ kind: "success", title: "Service completed", body: "Please rate your professional" });
+  };
+
+  const markRated: AppContextValue["markRated"] = (bookingId) => {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, rated: true } : b)),
+    );
   };
 
   return (
@@ -144,6 +186,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         partnerAcceptBooking,
         customerConfirmPartner,
         cancelBooking,
+        completeBooking,
+        markRated,
         availableNow,
         setAvailableNow,
         listedToday,
