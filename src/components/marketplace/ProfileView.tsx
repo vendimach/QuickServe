@@ -17,6 +17,7 @@ import {
   Headphones,
   MessageCircle,
   HelpCircle,
+  Gift,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,7 +26,7 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
 
 export const ProfileView = () => {
-  const { role } = useApp();
+  const { role, navigate } = useApp();
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { push } = useNotifications();
@@ -147,6 +148,24 @@ export const ProfileView = () => {
         <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-foreground">
           Switch
         </span>
+      </button>
+
+      {/* Refer & Earn promo card */}
+      <button
+        onClick={() => navigate({ name: "refer-earn" })}
+        className="relative flex w-full items-center gap-3 overflow-hidden rounded-2xl gradient-primary p-4 text-left text-primary-foreground shadow-card transition-smooth hover:opacity-95"
+      >
+        <div className="absolute -right-4 -top-4 h-20 w-20 rounded-full bg-primary-foreground/10 blur-xl" />
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-primary-foreground/15">
+          <Gift className="h-5 w-5" />
+        </div>
+        <div className="relative flex-1">
+          <p className="text-sm font-bold">Refer & Earn ₹200</p>
+          <p className="mt-0.5 text-xs text-primary-foreground/85">
+            Invite friends — they save ₹100, you earn ₹200
+          </p>
+        </div>
+        <ChevronRight className="relative h-4 w-4 shrink-0" />
       </button>
 
       <div className="overflow-hidden rounded-2xl bg-card shadow-soft">

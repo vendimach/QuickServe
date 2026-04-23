@@ -14,6 +14,7 @@ import { RatingForm } from "@/components/marketplace/RatingForm";
 import { PartnerProfile } from "@/components/marketplace/PartnerProfile";
 import { ChatView } from "@/components/marketplace/ChatView";
 import { LiveCam } from "@/components/marketplace/LiveCam";
+import { ReferEarn } from "@/components/marketplace/ReferEarn";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -55,6 +56,14 @@ const Router = () => {
     return (
       <AppShell title="Live Cam" subtitle="Encrypted in-home view">
         <LiveCam bookingId={view.bookingId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "refer-earn") {
+    return (
+      <AppShell title="Refer & Earn" subtitle="Invite friends, earn credits">
+        <ReferEarn />
       </AppShell>
     );
   }
