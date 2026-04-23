@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { MarketplaceDataProvider } from "@/contexts/MarketplaceDataContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -34,7 +35,8 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <NotificationProvider>
-              <Routes>
+              <MarketplaceDataProvider>
+                <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route
                   path="/"
@@ -45,7 +47,8 @@ const App = () => (
                   }
                 />
                 <Route path="*" element={<NotFound />} />
-              </Routes>
+                </Routes>
+              </MarketplaceDataProvider>
             </NotificationProvider>
           </AuthProvider>
         </BrowserRouter>

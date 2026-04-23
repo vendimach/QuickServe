@@ -10,6 +10,10 @@ import { PartnerDashboard } from "@/components/marketplace/PartnerDashboard";
 import { ProfileView } from "@/components/marketplace/ProfileView";
 import { MatchingList } from "@/components/marketplace/MatchingList";
 import { NotificationsView } from "@/components/marketplace/NotificationsView";
+import { RatingForm } from "@/components/marketplace/RatingForm";
+import { PartnerProfile } from "@/components/marketplace/PartnerProfile";
+import { ChatView } from "@/components/marketplace/ChatView";
+import { LiveCam } from "@/components/marketplace/LiveCam";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -19,6 +23,38 @@ const Router = () => {
     return (
       <AppShell title="Notifications" subtitle="Updates on your bookings">
         <NotificationsView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "rate-booking") {
+    return (
+      <AppShell title="Rate & Review" subtitle="Tell us how it went">
+        <RatingForm bookingId={view.bookingId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "partner-profile") {
+    return (
+      <AppShell title="Partner Profile" subtitle="Reviews & schedule">
+        <PartnerProfile partnerId={view.partnerId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "chat") {
+    return (
+      <AppShell title="Chat" subtitle="In-booking messages">
+        <ChatView bookingId={view.bookingId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "live-cam") {
+    return (
+      <AppShell title="Live Cam" subtitle="Encrypted in-home view">
+        <LiveCam bookingId={view.bookingId} />
       </AppShell>
     );
   }

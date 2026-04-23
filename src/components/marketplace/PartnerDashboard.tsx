@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
-import { MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye } from "lucide-react";
+import { MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye, CalendarDays, Plus, Trash2 } from "lucide-react";
 import { samplePartnerRequests, professionals } from "@/data/services";
-import type { PartnerRequest } from "@/types";
+import type { PartnerRequest, ScheduleSlot, DayOfWeek } from "@/types";
 import { useApp } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
+
+const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export const PartnerDashboard = () => {
   const { availableNow, setAvailableNow, listedToday, setListedToday, bookings } = useApp();
   const { push } = useNotifications();
   const [requests, setRequests] = useState<PartnerRequest[]>(samplePartnerRequests);
   const [accepted, setAccepted] = useState<PartnerRequest[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleSlot[]>(
+    professionals[0].schedule ?? [{ days: ["Mon", "Wed", "Fri"], start: "17:00", end: "22:00" }],
+  );
 
   // Notify partner when one of their accepted bookings is confirmed by the customer
   useEffect(() => {
@@ -46,6 +51,27 @@ export const PartnerDashboard = () => {
     }
   };
 
+  const toggleDay = (i: number, day: DayOfWeek) => {
+    setSchedule((prev) =>
+      prev.map((slot, idx) =>
+        idx !== i
+          ? slot
+          : {
+              ...slot,
+              days: slot.days.includes(day)
+                ? slot.days.filter((d) => d !== day)
+                : [...slot.days, day],
+            },
+      ),
+    );
+  };
+  const updateSlot = (i: number, field: "start" | "end", value: string) => {
+    setSchedule((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+  };
+  const addSlot = () => setSchedule((prev) => [...prev, { days: ["Mon"], start: "09:00", end: "17:00" }]);
+  const removeSlot = (i: number) => setSchedule((prev) => prev.filter((_, idx) => idx !== i));
+  const saveSchedule = () => push({ kind: "success", title: "Schedule updated", body: `${schedule.length} slot(s) saved` });
+
   return (
     <div className="-mt-5 space-y-5 px-5 pb-6">
       {/* Two availability switches */}
@@ -79,6 +105,76 @@ export const PartnerDashboard = () => {
           }}
           color="primary"
         />
+      </div>
+
+      {/* Schedule editor */}
+      <div className="rounded-2xl bg-card p-4 shadow-card">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-primary" />
+          <p className="text-sm font-bold text-foreground">Weekly availability</p>
+        </div>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          Customers see you in scheduled-listings during these slots.
+        </p>
+        <div className="mt-3 space-y-3">
+          {schedule.map((slot, i) => (
+            <div key={i} className="rounded-xl border border-border bg-secondary/40 p-3">
+              <div className="flex flex-wrap gap-1">
+                {DAYS.map((d) => {
+                  const on = slot.days.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      onClick={() => toggleDay(i, d)}
+                      className={cn(
+                        "rounded-lg px-2 py-1 text-[10px] font-bold uppercase transition-smooth",
+                        on ? "gradient-primary text-primary-foreground shadow-soft" : "bg-card text-muted-foreground",
+                      )}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="time"
+                  value={slot.start}
+                  onChange={(e) => updateSlot(i, "start", e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-card px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <input
+                  type="time"
+                  value={slot.end}
+                  onChange={(e) => updateSlot(i, "end", e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-card px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+                />
+                <button
+                  onClick={() => removeSlot(i)}
+                  aria-label="Remove slot"
+                  className="rounded-lg bg-destructive/10 p-1.5 text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={addSlot}
+            className="flex items-center justify-center gap-1 rounded-xl border border-dashed border-border bg-card py-2 text-xs font-semibold text-muted-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add slot
+          </button>
+          <button
+            onClick={saveSchedule}
+            className="rounded-xl gradient-primary py-2 text-xs font-bold text-primary-foreground shadow-soft"
+          >
+            Save schedule
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
