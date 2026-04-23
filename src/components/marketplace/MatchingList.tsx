@@ -1,4 +1,4 @@
-import { ArrowLeft, Star, MapPin, Clock, Zap, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Star, MapPin, Clock, Zap, CheckCircle2, User } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { professionals as allPros } from "@/data/services";
 import { Button } from "@/components/ui/button";
@@ -108,9 +108,15 @@ export const MatchingList = ({ bookingId }: Props) => {
                   </span>
                 )}
               </div>
+              <button
+                onClick={() => navigate({ name: "partner-profile", partnerId: p.id })}
+                className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-secondary py-1.5 text-[11px] font-semibold text-foreground hover:bg-muted"
+              >
+                <User className="h-3 w-3" /> View profile & reviews
+              </button>
               <Button
                 size="sm"
-                className="mt-3 w-full"
+                className="mt-2 w-full"
                 onClick={() => customerConfirmPartner(booking.id, p)}
               >
                 <CheckCircle2 className="h-4 w-4 mr-1" /> Confirm {p.name.split(" ")[0]}
