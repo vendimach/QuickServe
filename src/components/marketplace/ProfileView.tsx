@@ -17,6 +17,7 @@ import {
   Headphones,
   MessageCircle,
   HelpCircle,
+  Gift,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,7 +26,7 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
 
 export const ProfileView = () => {
-  const { role } = useApp();
+  const { role, navigate } = useApp();
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { push } = useNotifications();

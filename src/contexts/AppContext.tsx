@@ -18,7 +18,8 @@ type View =
   | { name: "rate-booking"; bookingId: string }
   | { name: "partner-profile"; partnerId: string }
   | { name: "chat"; bookingId: string }
-  | { name: "live-cam"; bookingId: string };
+  | { name: "live-cam"; bookingId: string }
+  | { name: "refer-earn" };
 
 interface AppContextValue {
   role: Role;
