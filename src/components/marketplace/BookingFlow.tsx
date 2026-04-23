@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight } from "lucide-react";
+import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle } from "lucide-react";
 import { services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
+import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
+import { PreferencesEditor } from "./PreferencesEditor";
+import { cancellationPolicy } from "@/data/services";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -18,10 +21,12 @@ const dateOptions = Array.from({ length: 5 }).map((_, i) => {
 
 export const BookingFlow = ({ serviceId }: Props) => {
   const { navigate, createBooking } = useApp();
+  const { preferences } = useMarketplaceData();
   const service = services.find((s) => s.id === serviceId);
   const [mode, setMode] = useState<"instant" | "scheduled" | null>(null);
   const [date, setDate] = useState<Date>(dateOptions[0]);
   const [time, setTime] = useState<string>(timeSlots[0]);
+  const [showPrefs, setShowPrefs] = useState(false);
 
   if (!service) return null;
 
@@ -35,9 +40,11 @@ export const BookingFlow = ({ serviceId }: Props) => {
       scheduledAt = new Date(date);
       scheduledAt.setHours(hour, parseInt(mPart), 0, 0);
     }
-    const booking = createBooking(service, mode, scheduledAt);
+    const booking = createBooking(service, mode, scheduledAt, undefined, preferences[service.id]);
     navigate({ name: "matching", bookingId: booking.id });
   };
+
+  const hasPrefs = !!preferences[service.id];
 
   return (
     <div className="-mt-5 px-5 pb-6">
@@ -152,6 +159,45 @@ export const BookingFlow = ({ serviceId }: Props) => {
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </div>
+
+      {/* Preferences */}
+      <div className="mt-3">
+        <button
+          onClick={() => setShowPrefs((v) => !v)}
+          className="flex w-full items-center justify-between rounded-2xl bg-card p-4 shadow-soft"
+        >
+          <div className="flex items-center gap-2">
+            <Settings2 className="h-4 w-4 text-accent" />
+            <div className="text-left">
+              <p className="text-xs font-semibold text-foreground">
+                Service preferences {hasPrefs && <span className="text-success">• Saved</span>}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                e.g. walk at 6, food at 8, medicine at 9
+              </p>
+            </div>
+          </div>
+          <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", showPrefs && "rotate-90")} />
+        </button>
+        {showPrefs && (
+          <div className="mt-3">
+            <PreferencesEditor service={service} onSaved={() => setShowPrefs(false)} />
+          </div>
+        )}
+      </div>
+
+      {/* Cancellation rules notice */}
+      <div className="mt-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-3">
+        <div className="flex items-start gap-2 text-[11px] text-foreground">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+          <div>
+            <p className="font-semibold">Cancellation policy</p>
+            <p className="mt-0.5 text-muted-foreground">
+              Free before partner accepts • ₹{cancellationPolicy.afterAcceptFee} after acceptance • ₹{cancellationPolicy.withinArrivalFee} within 15 min of arrival.
+            </p>
+          </div>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { AiAssistant } from "./AiAssistant";
 
 interface AppShellProps {
   children: ReactNode;
@@ -35,7 +36,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto flex min-h-screen max-w-md flex-col bg-background shadow-elevated md:my-4 md:min-h-[calc(100vh-2rem)] md:rounded-3xl md:overflow-hidden">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-elevated sm:my-4 sm:min-h-[calc(100vh-2rem)] sm:rounded-3xl sm:overflow-hidden lg:max-w-lg">
         {showHeader && (
           <header className="gradient-hero relative px-5 pt-6 pb-8 text-primary-foreground">
             <div className="flex items-center justify-between">
@@ -75,7 +76,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
 
         <main className="flex-1 overflow-y-auto pb-24">{children}</main>
 
-        <nav className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 items-center justify-around border-t border-border bg-card/95 px-4 py-2 backdrop-blur-md md:absolute md:bottom-0 md:left-0 md:translate-x-0">
+        <nav className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 items-center justify-around border-t border-border bg-card/95 px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:absolute sm:bottom-0 sm:left-0 sm:translate-x-0 lg:max-w-lg">
           {(role === "customer" ? customerTabs : partnerTabs).map((tab) => {
             const active = view.name === tab.view.name;
             const Icon = tab.icon;
@@ -95,6 +96,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
           })}
         </nav>
       </div>
+      <AiAssistant />
     </div>
   );
 };
