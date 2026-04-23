@@ -78,7 +78,7 @@ export const BookingsList = () => {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {filtered.map((b) => {
             const statusStyles: Record<string, string> = {
               searching: "bg-warning/15 text-warning",
@@ -102,7 +102,9 @@ export const BookingsList = () => {
               <button
                 key={b.id}
                 onClick={() => {
-                  if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
+                  if (b.status === "completed" && !b.rated) {
+                    navigate({ name: "rate-booking", bookingId: b.id });
+                  } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
                     navigate({ name: "matching", bookingId: b.id });
                   } else {
                     navigate({ name: "live-status", bookingId: b.id });
@@ -127,6 +129,11 @@ export const BookingsList = () => {
                   <span className={cn("mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", statusStyles[b.status])}>
                     {active === "refunds" ? "Refunded" : labels[b.status]}
                   </span>
+                  {b.status === "completed" && !b.rated && (
+                    <span className="ml-1 inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
+                      ⭐ Rate
+                    </span>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className={cn(

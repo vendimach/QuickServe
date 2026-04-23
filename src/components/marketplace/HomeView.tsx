@@ -38,7 +38,7 @@ export const HomeView = () => {
           <h2 className="text-base font-bold text-foreground">Categories</h2>
           <button className="text-xs font-medium text-primary">See all</button>
         </div>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {categories.map((cat) => {
             const Icon = iconMap[cat.icon as keyof typeof iconMap];
             return (
