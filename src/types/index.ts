@@ -1,4 +1,4 @@
-export type Role = "customer" | "partner" | "admin";
+export type Role = "customer" | "partner";
 
 export type BookingType = "instant" | "scheduled";
 

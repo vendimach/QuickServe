@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Calendar, ChevronRight, Zap, CalendarClock, Inbox, RotateCcw, CheckCheck, XCircle, CreditCard, Star } from "lucide-react";
+import { Calendar, ChevronRight, Zap, CalendarClock, Inbox, RotateCcw, CheckCheck, XCircle } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 
@@ -99,22 +99,19 @@ export const BookingsList = () => {
               refunded: "Refunded",
             };
             return (
-              <div
+              <button
                 key={b.id}
-                className="rounded-2xl bg-card p-4 shadow-soft transition-smooth hover:shadow-card"
+                onClick={() => {
+                  if (b.status === "completed" && !b.rated) {
+                    navigate({ name: "rate-booking", bookingId: b.id });
+                  } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
+                    navigate({ name: "matching", bookingId: b.id });
+                  } else {
+                    navigate({ name: "live-status", bookingId: b.id });
+                  }
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-soft transition-smooth hover:shadow-card"
               >
-                <button
-                  onClick={() => {
-                    if (b.status === "completed" && !b.rated) {
-                      navigate({ name: "rate-booking", bookingId: b.id });
-                    } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
-                      navigate({ name: "matching", bookingId: b.id });
-                    } else {
-                      navigate({ name: "live-status", bookingId: b.id });
-                    }
-                  }}
-                  className="flex w-full items-center gap-3 text-left"
-                >
                 <div className={cn(
                   "flex h-10 w-10 items-center justify-center rounded-xl",
                   b.type === "instant" ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent",
@@ -147,26 +144,7 @@ export const BookingsList = () => {
                   </p>
                   <ChevronRight className="ml-auto mt-1 h-4 w-4 text-muted-foreground" />
                 </div>
-                </button>
-                {b.status === "completed" && (
-                  <div className="mt-3 flex gap-2 border-t border-border pt-3">
-                    <button
-                      onClick={() => navigate({ name: "payment", bookingId: b.id })}
-                      className="flex-1 rounded-lg bg-primary/10 py-1.5 text-[11px] font-bold text-primary"
-                    >
-                      <CreditCard className="mr-1 inline h-3 w-3" /> Pay / Refund
-                    </button>
-                    {!b.rated && (
-                      <button
-                        onClick={() => navigate({ name: "rate-booking", bookingId: b.id })}
-                        className="flex-1 rounded-lg bg-warning/10 py-1.5 text-[11px] font-bold text-warning"
-                      >
-                        <Star className="mr-1 inline h-3 w-3" /> Rate
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+              </button>
             );
           })}
         </div>

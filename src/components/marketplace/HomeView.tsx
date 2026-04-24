@@ -1,8 +1,6 @@
 import { Search, MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star } from "lucide-react";
 import { categories, services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
-import { useAddresses } from "@/contexts/AddressContext";
-import { VerificationCarousel } from "./VerificationCarousel";
 import { cn } from "@/lib/utils";
 
 const iconMap = { Sparkles, HeartPulse, Baby, PawPrint };
@@ -15,7 +13,6 @@ const colorMap: Record<string, string> = {
 
 export const HomeView = () => {
   const { navigate } = useApp();
-  const { defaultAddress } = useAddresses();
   const featured = services.slice(0, 3);
 
   return (
@@ -31,16 +28,9 @@ export const HomeView = () => {
         </div>
         <div className="mt-2.5 flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
           <MapPin className="h-3.5 w-3.5 text-primary" />
-          <span>
-            {defaultAddress
-              ? `${defaultAddress.line1}${defaultAddress.city ? `, ${defaultAddress.city}` : ""}`
-              : "Set your delivery address →"}
-          </span>
+          <span>12, MG Road, Bengaluru</span>
         </div>
       </div>
-
-      {/* Verification carousel */}
-      <VerificationCarousel />
 
       {/* Categories */}
       <section className="animate-fade-in-up">
