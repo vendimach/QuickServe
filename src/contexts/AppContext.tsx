@@ -3,6 +3,7 @@ import type { Booking, Role, Service, BookingType, Professional, ServicePreferen
 import { professionals as allPros } from "@/data/services";
 import { useAuth } from "./AuthContext";
 import { useNotifications } from "./NotificationContext";
+import { supabase } from "@/integrations/supabase/client";
 
 type View =
   | { name: "home" }
@@ -19,7 +20,11 @@ type View =
   | { name: "partner-profile"; partnerId: string }
   | { name: "chat"; bookingId: string }
   | { name: "live-cam"; bookingId: string }
-  | { name: "refer-earn" };
+  | { name: "refer-earn" }
+  | { name: "saved-addresses" }
+  | { name: "edit-profile" }
+  | { name: "admin" }
+  | { name: "payment"; bookingId: string };
 
 interface AppContextValue {
   role: Role;
@@ -48,7 +53,7 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const { role: authRole } = useAuth();
+  const { role: authRole, user } = useAuth();
   const { push } = useNotifications();
   const role: Role = authRole ?? "customer";
   const [view, setView] = useState<View>({ name: "home" });
@@ -81,6 +86,36 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       preferences,
     };
     setBookings((prev) => [booking, ...prev]);
+    // Persist to DB (best-effort, non-blocking)
+    if (user) {
+      supabase
+        .from("bookings")
+        .insert({
+          id: booking.id.startsWith("b-") ? undefined : booking.id,
+          user_id: user.id,
+          service_id: service.id,
+          service_name: service.name,
+          category_id: service.categoryId,
+          booking_type: type,
+          status: booking.status,
+          scheduled_at: scheduledAt?.toISOString() ?? null,
+          address: booking.address,
+          price: service.price,
+          duration: service.duration,
+          preferences: preferences ? (preferences as unknown as Record<string, unknown>) : null,
+        })
+        .select("id")
+        .single()
+        .then(({ data }) => {
+          if (data?.id) {
+            // swap local id with DB id so updates work
+            setBookings((prev) =>
+              prev.map((b) => (b.id === booking.id ? { ...b, id: data.id } : b)),
+            );
+            booking.id = data.id;
+          }
+        });
+    }
     push({
       kind: "info",
       title: type === "instant" ? "Searching for partners" : "Booking request sent",
@@ -131,6 +166,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           : b,
       ),
     );
+    if (user) {
+      supabase
+        .from("bookings")
+        .update({
+          status: "confirmed",
+          professional_id: professional.id,
+          professional_name: professional.name,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq("id", bookingId);
+    }
     push({
       kind: "confirm",
       title: "Booking confirmed",
@@ -160,6 +206,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: "cancelled" } : b)),
     );
+    if (user) supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
     push({ kind: "warning", title: "Booking cancelled" });
   };
 
@@ -167,6 +214,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: "completed" } : b)),
     );
+    if (user) {
+      supabase
+        .from("bookings")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", bookingId);
+    }
     push({ kind: "success", title: "Service completed", body: "Please rate your professional" });
   };
 
