@@ -91,7 +91,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       supabase
         .from("bookings")
         .insert({
-          id: booking.id.startsWith("b-") ? undefined : booking.id,
           user_id: user.id,
           service_id: service.id,
           service_name: service.name,
