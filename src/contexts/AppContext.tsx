@@ -88,21 +88,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setBookings((prev) => [booking, ...prev]);
     // Persist to DB (best-effort, non-blocking)
     if (user) {
+      const insertRow = {
+        user_id: user.id,
+        service_id: service.id,
+        service_name: service.name,
+        category_id: service.categoryId,
+        booking_type: type,
+        status: booking.status,
+        scheduled_at: scheduledAt?.toISOString() ?? null,
+        address: booking.address,
+        price: service.price,
+        duration: service.duration,
+        preferences: preferences ? JSON.parse(JSON.stringify(preferences)) : null,
+      };
       supabase
         .from("bookings")
-        .insert({
-          user_id: user.id,
-          service_id: service.id,
-          service_name: service.name,
-          category_id: service.categoryId,
-          booking_type: type,
-          status: booking.status,
-          scheduled_at: scheduledAt?.toISOString() ?? null,
-          address: booking.address,
-          price: service.price,
-          duration: service.duration,
-          preferences: preferences ? (preferences as unknown as Record<string, unknown>) : null,
-        })
+        .insert(insertRow)
         .select("id")
         .single()
         .then(({ data }) => {
