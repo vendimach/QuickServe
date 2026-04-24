@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Gift, Copy, Share2, Check, Users, Wallet, Sparkles, Ticket } from "lucide-react";
+import { ArrowLeft, Gift, Copy, Share2, Check, Users, Wallet, Sparkles, Ticket, ChevronDown, HelpCircle } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationContext";
@@ -321,6 +321,67 @@ export const ReferEarn = () => {
       <p className="px-2 text-center text-[10px] text-muted-foreground">
         Credits never expire. Max ₹{REWARD_PER_REFERRAL * 25} per month. T&C apply.
       </p>
+
+      <ReferralFAQ />
+    </div>
+  );
+};
+
+const faqItems: { q: string; a: string }[] = [
+  {
+    q: "When do I receive my ₹200 reward?",
+    a: "Your reward is credited within 24 hours of your friend completing their first booking and a successful payment.",
+  },
+  {
+    q: "How do I use my wallet credits?",
+    a: "Wallet credits auto-apply at checkout. You can use up to ₹200 per booking. They never expire.",
+  },
+  {
+    q: "Is there a limit on referrals?",
+    a: `Yes — you can earn up to ₹${REWARD_PER_REFERRAL * 25} per month. There is no lifetime cap on the number of friends you invite.`,
+  },
+  {
+    q: "What if my friend cancels their booking?",
+    a: "If the booking is cancelled or refunded, your reward will be reversed automatically.",
+  },
+  {
+    q: "Can I refer existing QuickServe users?",
+    a: "No, the offer is valid only for friends who are completely new to QuickServe and have never booked before.",
+  },
+  {
+    q: "Where can I see my referral status?",
+    a: "Scroll up to the 'Your referrals' section — every friend's join and completion status is tracked there.",
+  },
+];
+
+const ReferralFAQ = () => {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <div className="rounded-2xl bg-card p-5 shadow-soft">
+      <div className="flex items-center gap-2">
+        <HelpCircle className="h-4 w-4 text-primary" />
+        <p className="text-sm font-bold text-foreground">Refer & Earn FAQ</p>
+      </div>
+      <div className="mt-3 divide-y divide-border">
+        {faqItems.map((item, i) => {
+          const isOpen = open === i;
+          return (
+            <button
+              key={item.q}
+              onClick={() => setOpen(isOpen ? null : i)}
+              className="block w-full py-3 text-left"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground">{item.q}</p>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                />
+              </div>
+              {isOpen && <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{item.a}</p>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };

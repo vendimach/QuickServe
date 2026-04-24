@@ -18,11 +18,14 @@ import {
   MessageCircle,
   HelpCircle,
   Gift,
+  Edit2,
+  LayoutDashboard,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useAddresses } from "@/contexts/AddressContext";
 import { cn } from "@/lib/utils";
 
 export const ProfileView = () => {
@@ -30,11 +33,20 @@ export const ProfileView = () => {
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { push } = useNotifications();
+  const { addresses, defaultAddress } = useAddresses();
 
   const name = profile?.full_name ?? "Guest";
+  const avatarUrl = (profile as { avatar_url?: string } | null)?.avatar_url ?? "";
   const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const rows = [
+  const rows: Array<{
+    icon: typeof User;
+    label: string;
+    value: string;
+    status?: "verified" | "pending";
+    iconColor: string;
+    onClick?: () => void;
+  }> = [
     {
       icon: ShieldCheck,
       label: "Aadhaar Verification",
@@ -71,8 +83,11 @@ export const ProfileView = () => {
     {
       icon: Home,
       label: "Saved Addresses",
-      value: "Home, Work • 2 saved",
+      value: addresses.length
+        ? `${defaultAddress?.label ?? "Home"} • ${addresses.length} saved`
+        : "Add your first address",
       iconColor: "bg-accent/10 text-accent",
+      onClick: () => navigate({ name: "saved-addresses" }),
     },
     {
       icon: Info,
@@ -80,7 +95,17 @@ export const ProfileView = () => {
       value: "Version 1.0.0",
       iconColor: "bg-muted text-muted-foreground",
     },
-  ] as const;
+  ];
+
+  if (role === "admin") {
+    rows.unshift({
+      icon: LayoutDashboard,
+      label: "Admin Dashboard",
+      value: "View metrics & activity",
+      iconColor: "bg-destructive/15 text-destructive",
+      onClick: () => navigate({ name: "admin" }),
+    });
+  }
 
   const supportRows = [
     {
@@ -117,19 +142,30 @@ export const ProfileView = () => {
     <div className="-mt-5 space-y-4 px-5 pb-6">
       <div className="rounded-2xl bg-card p-5 shadow-card">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full gradient-primary text-xl font-bold text-primary-foreground shadow-soft">
-            {initials || <User className="h-7 w-7" />}
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full gradient-primary text-xl font-bold text-primary-foreground shadow-soft">
+            {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : initials || <User className="h-7 w-7" />}
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold text-foreground">{name}</h2>
             <div className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-              <span className="line-clamp-2">12, MG Road, Bengaluru 560001</span>
+              <span className="line-clamp-2">
+                {defaultAddress
+                  ? `${defaultAddress.line1}${defaultAddress.city ? `, ${defaultAddress.city}` : ""}`
+                  : "No address saved yet"}
+              </span>
             </div>
             <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
               {role}
             </span>
           </div>
+          <button
+            onClick={() => navigate({ name: "edit-profile" })}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-foreground transition-smooth hover:bg-muted"
+            aria-label="Edit profile"
+          >
+            <Edit2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -174,6 +210,7 @@ export const ProfileView = () => {
           return (
             <button
               key={r.label}
+              onClick={r.onClick}
               className={cn(
                 "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-smooth hover:bg-secondary/50",
                 i !== rows.length - 1 && "border-b border-border",
@@ -188,12 +225,12 @@ export const ProfileView = () => {
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{r.value}</p>
                 )}
               </div>
-              {(r as { status?: string }).status === "verified" && (
+              {r.status === "verified" && (
                 <span className="flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
                   <CheckCircle2 className="h-3 w-3" /> Verified
                 </span>
               )}
-              {(r as { status?: string }).status === "pending" && (
+              {r.status === "pending" && (
                 <span className="flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
                   <AlertCircle className="h-3 w-3" /> Pending
                 </span>

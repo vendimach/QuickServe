@@ -318,7 +318,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
                 <button
                   onClick={() => {
                     completeBooking(booking.id);
-                    navigate({ name: "rate-booking", bookingId: booking.id });
+                    navigate({ name: "payment", bookingId: booking.id });
                   }}
                   className="rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft"
                 >
