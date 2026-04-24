@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Home, Calendar, User, Briefcase, Bell, Sun, Moon, LayoutDashboard, Sparkles } from "lucide-react";
+import { Home, Calendar, User, Briefcase, Bell, Sun, Moon, LayoutDashboard, Sparkles, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +15,7 @@ interface AppShellProps {
 }
 
 export const AppShell = ({ children, title, subtitle, showHeader = true }: AppShellProps) => {
-  const { role, view, navigate } = useApp();
+  const { role, view, navigate, goBack, canGoBack } = useApp();
   const { profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { unreadCount } = useNotifications();
@@ -121,7 +121,17 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
         {showHeader && (
           <header className="gradient-hero relative px-5 pt-6 pb-8 text-primary-foreground lg:px-10 lg:pt-10 lg:pb-12">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex items-start gap-3">
+                {canGoBack && (
+                  <button
+                    aria-label="Go back"
+                    onClick={goBack}
+                    className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition-smooth hover:bg-white/25"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                )}
+                <div>
                 <p className="text-xs font-medium uppercase tracking-wider opacity-80">
                   {role === "customer" ? `Hi ${greeting} 👋` : "Service Partner"}
                 </p>
@@ -129,6 +139,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
                 {subtitle && (
                   <p className="mt-0.5 text-sm opacity-90 lg:text-base">{subtitle}</p>
                 )}
+                </div>
               </div>
               <div className="flex items-center gap-2 lg:hidden">
                 <button

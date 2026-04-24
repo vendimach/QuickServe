@@ -30,6 +30,8 @@ interface AppContextValue {
   role: Role;
   view: View;
   navigate: (v: View) => void;
+  goBack: () => void;
+  canGoBack: boolean;
   bookings: Booking[];
   createBooking: (
     service: Service,
@@ -57,6 +59,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { push } = useNotifications();
   const role: Role = authRole ?? "customer";
   const [view, setView] = useState<View>({ name: "home" });
+  const [history, setHistory] = useState<View[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [availableNow, setAvailableNow] = useState(true);
   const [listedToday, setListedToday] = useState(true);
@@ -64,7 +67,48 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Reset view when role changes
   useEffect(() => {
     setView(role === "partner" ? { name: "partner-dashboard" } : { name: "home" });
+    setHistory([]);
   }, [role]);
+
+  const navigate = (v: View) => {
+    setView((current) => {
+      // Don't push duplicate consecutive entries
+      if (current.name === v.name && JSON.stringify(current) === JSON.stringify(v)) return current;
+      setHistory((h) => [...h, current]);
+      return v;
+    });
+  };
+
+  const goBack = () => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setView(prev);
+      return h.slice(0, -1);
+    });
+  };
+
+  // Hook into browser back button so it navigates within the app instead of leaving
+  useEffect(() => {
+    // Seed a state entry so the first back press fires popstate
+    if (window.history.state?.qsView == null) {
+      window.history.replaceState({ qsView: true }, "");
+    }
+    window.history.pushState({ qsView: true }, "");
+    const onPop = () => {
+      if (history.length > 0) {
+        goBack();
+        // re-push so a future back press still triggers
+        window.history.pushState({ qsView: true }, "");
+      } else {
+        // nothing to go back to inside app — re-push to avoid leaving
+        window.history.pushState({ qsView: true }, "");
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history.length]);
 
   const createBooking: AppContextValue["createBooking"] = (
     service,
@@ -234,7 +278,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       value={{
         role,
         view,
-        navigate: setView,
+        navigate,
+        goBack,
+        canGoBack: history.length > 0,
         bookings,
         createBooking,
         partnerAcceptBooking,
