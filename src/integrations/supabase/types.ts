@@ -19,6 +19,9 @@ export type Database = {
           address: string
           arrived_at: string | null
           booking_type: string
+          cancellation_fee: number | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
           category_id: string
           completed_at: string | null
           confirmed_at: string | null
@@ -34,10 +37,14 @@ export type Database = {
           professional_name: string | null
           rating: number | null
           rating_comment: string | null
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
           refund_status: string | null
           scheduled_at: string | null
           service_id: string
           service_name: string
+          start_otp: string | null
+          started_at: string | null
           status: string
           updated_at: string
           user_id: string
@@ -46,6 +53,9 @@ export type Database = {
           address: string
           arrived_at?: string | null
           booking_type: string
+          cancellation_fee?: number | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           category_id: string
           completed_at?: string | null
           confirmed_at?: string | null
@@ -61,10 +71,14 @@ export type Database = {
           professional_name?: string | null
           rating?: number | null
           rating_comment?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
           refund_status?: string | null
           scheduled_at?: string | null
           service_id: string
           service_name: string
+          start_otp?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -73,6 +87,9 @@ export type Database = {
           address?: string
           arrived_at?: string | null
           booking_type?: string
+          cancellation_fee?: number | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           category_id?: string
           completed_at?: string | null
           confirmed_at?: string | null
@@ -88,12 +105,55 @@ export type Database = {
           professional_name?: string | null
           rating?: number | null
           rating_comment?: string | null
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
           refund_status?: string | null
           scheduled_at?: string | null
           service_id?: string
           service_name?: string
+          start_otp?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payment_methods: {
+        Row: {
+          brand: string | null
+          created_at: string
+          id: string
+          is_default: boolean
+          kind: string
+          label: string
+          last4: string | null
+          updated_at: string
+          upi_id: string | null
+          user_id: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          kind: string
+          label: string
+          last4?: string | null
+          updated_at?: string
+          upi_id?: string | null
+          user_id: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          kind?: string
+          label?: string
+          last4?: string | null
+          updated_at?: string
+          upi_id?: string | null
           user_id?: string
         }
         Relationships: []
@@ -146,10 +206,12 @@ export type Database = {
         Row: {
           aadhaar_last4: string
           aadhaar_verified: boolean
+          about: string | null
           accepted_terms: boolean
           avatar_url: string | null
           bio: string | null
           created_at: string
+          default_address_id: string | null
           email: string | null
           full_name: string
           id: string
@@ -160,10 +222,12 @@ export type Database = {
         Insert: {
           aadhaar_last4: string
           aadhaar_verified?: boolean
+          about?: string | null
           accepted_terms?: boolean
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          default_address_id?: string | null
           email?: string | null
           full_name: string
           id: string
@@ -174,10 +238,12 @@ export type Database = {
         Update: {
           aadhaar_last4?: string
           aadhaar_verified?: boolean
+          about?: string | null
           accepted_terms?: boolean
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          default_address_id?: string | null
           email?: string | null
           full_name?: string
           id?: string
