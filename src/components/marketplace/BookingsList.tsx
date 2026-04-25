@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Calendar, ChevronRight, Zap, CalendarClock, Inbox, RotateCcw, CheckCheck, XCircle } from "lucide-react";
+import { Calendar, ChevronRight, Zap, CalendarClock, Inbox, RotateCcw, CheckCheck, XCircle, KeyRound } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ const tabs: { id: Tab; label: string; icon: typeof Calendar }[] = [
 ];
 
 export const BookingsList = () => {
-  const { bookings, navigate } = useApp();
+  const { bookings, navigate, role } = useApp();
   const [active, setActive] = useState<Tab>("scheduled");
 
   const filtered = useMemo(() => {
