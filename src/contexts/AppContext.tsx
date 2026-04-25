@@ -295,7 +295,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (user) {
       supabase
         .from("bookings")
-        .insert({
+        .insert([{
           user_id: user.id,
           service_id: service.id,
           service_name: service.name,
@@ -306,10 +306,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           address: booking.address,
           price: service.price,
           duration: service.duration,
-          preferences: preferences ? (preferences as unknown as object) : null,
+          preferences: preferences ? JSON.parse(JSON.stringify(preferences)) : null,
           payment_method: paymentMethodLabel ?? null,
           start_otp: otp,
-        })
+        }])
         .select()
         .single()
         .then(({ data, error }) => {
