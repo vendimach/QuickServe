@@ -1,1 +1,4 @@
 project_id = "zjqmlfyjtiapmibivmis"
+
+[functions.razorpay-webhook]
+verify_jwt = false
