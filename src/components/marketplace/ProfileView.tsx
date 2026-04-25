@@ -23,6 +23,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useUserData } from "@/contexts/UserDataContext";
 import { cn } from "@/lib/utils";
 
 export const ProfileView = () => {
@@ -30,11 +31,21 @@ export const ProfileView = () => {
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { push } = useNotifications();
+  const { defaultAddress } = useUserData();
 
   const name = profile?.full_name ?? "Guest";
   const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const rows = [
+  type Row = {
+    icon: typeof User;
+    label: string;
+    value: string;
+    status?: "verified" | "pending";
+    iconColor: string;
+    action?: () => void;
+  };
+
+  const rows: Row[] = [
     {
       icon: ShieldCheck,
       label: "Aadhaar Verification",
@@ -63,16 +74,32 @@ export const ProfileView = () => {
       iconColor: "bg-warning/15 text-warning",
     },
     {
+      icon: User,
+      label: "Edit Profile",
+      value: "Name, mobile, bio",
+      iconColor: "bg-primary/10 text-primary",
+      action: () => navigate({ name: "edit-profile" }),
+    },
+    {
       icon: CreditCard,
       label: "Payment Methods",
-      value: "UPI • HDFC ••4521",
+      value: "Manage cards, UPI & wallets",
       iconColor: "bg-primary/10 text-primary",
+      action: () => navigate({ name: "payments" }),
     },
     {
       icon: Home,
       label: "Saved Addresses",
-      value: "Home, Work • 2 saved",
+      value: "Add or edit your addresses",
       iconColor: "bg-accent/10 text-accent",
+      action: () => navigate({ name: "addresses" }),
+    },
+    {
+      icon: HelpCircle,
+      label: "FAQs & Help Center",
+      value: "Searchable answers, 24×7",
+      iconColor: "bg-warning/15 text-warning",
+      action: () => navigate({ name: "faqs" }),
     },
     {
       icon: Info,
@@ -80,7 +107,7 @@ export const ProfileView = () => {
       value: "Version 1.0.0",
       iconColor: "bg-muted text-muted-foreground",
     },
-  ] as const;
+  ];
 
   const supportRows = [
     {
@@ -107,8 +134,8 @@ export const ProfileView = () => {
     {
       icon: HelpCircle,
       label: "FAQs & Help",
-      value: "Tap the AI bubble for instant help",
-      action: () => push({ kind: "info", title: "Tip", body: "Use the floating AI bubble bottom-right." }),
+      value: "Browse our help center",
+      action: () => navigate({ name: "faqs" }),
       iconColor: "bg-warning/15 text-warning",
     },
   ] as const;
@@ -122,10 +149,17 @@ export const ProfileView = () => {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold text-foreground">{name}</h2>
-            <div className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
+            <button
+              onClick={() => navigate({ name: "addresses" })}
+              className="mt-1 flex items-start gap-1 text-left text-xs text-muted-foreground hover:text-foreground"
+            >
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-              <span className="line-clamp-2">12, MG Road, Bengaluru 560001</span>
-            </div>
+              <span className="line-clamp-2">
+                {defaultAddress
+                  ? `${defaultAddress.label} • ${defaultAddress.line1}${defaultAddress.city ? `, ${defaultAddress.city}` : ""}`
+                  : "Add a saved address"}
+              </span>
+            </button>
             <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
               {role}
             </span>
@@ -174,6 +208,7 @@ export const ProfileView = () => {
           return (
             <button
               key={r.label}
+              onClick={r.action}
               className={cn(
                 "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-smooth hover:bg-secondary/50",
                 i !== rows.length - 1 && "border-b border-border",
@@ -188,12 +223,12 @@ export const ProfileView = () => {
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{r.value}</p>
                 )}
               </div>
-              {(r as { status?: string }).status === "verified" && (
+              {r.status === "verified" && (
                 <span className="flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
                   <CheckCircle2 className="h-3 w-3" /> Verified
                 </span>
               )}
-              {(r as { status?: string }).status === "pending" && (
+              {r.status === "pending" && (
                 <span className="flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
                   <AlertCircle className="h-3 w-3" /> Pending
                 </span>

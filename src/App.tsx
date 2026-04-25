@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { MarketplaceDataProvider } from "@/contexts/MarketplaceDataContext";
+import { UserDataProvider } from "@/contexts/UserDataContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -36,7 +37,8 @@ const App = () => (
           <AuthProvider>
             <NotificationProvider>
               <MarketplaceDataProvider>
-                <Routes>
+                <UserDataProvider>
+                  <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route
                   path="/"
@@ -46,8 +48,17 @@ const App = () => (
                     </Protected>
                   }
                 />
+                <Route
+                  path="/*"
+                  element={
+                    <Protected>
+                      <Index />
+                    </Protected>
+                  }
+                />
                 <Route path="*" element={<NotFound />} />
-                </Routes>
+                  </Routes>
+                </UserDataProvider>
               </MarketplaceDataProvider>
             </NotificationProvider>
           </AuthProvider>

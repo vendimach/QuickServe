@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { ShieldCheck, Phone, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -35,18 +34,26 @@ export default function Auth() {
         </div>
 
         <Card className="p-6 shadow-card">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as "signin" | "signup")}>
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-            <TabsContent value="signin">
-              <SignInForm />
-            </TabsContent>
-            <TabsContent value="signup">
-              <SignUpFlow onDone={() => setTab("signin")} />
-            </TabsContent>
-          </Tabs>
+          {/* Fixed-position toggle — no layout shift on tab switch */}
+          <div className="grid grid-cols-2 rounded-xl bg-secondary p-1 mb-5">
+            {(["signin", "signup"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={`rounded-lg py-2 text-sm font-semibold transition-smooth ${
+                  tab === t
+                    ? "bg-card text-foreground shadow-soft"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t === "signin" ? "Sign In" : "Sign Up"}
+              </button>
+            ))}
+          </div>
+          <div>
+            {tab === "signin" ? <SignInForm /> : <SignUpFlow onDone={() => setTab("signin")} />}
+          </div>
         </Card>
       </div>
     </div>

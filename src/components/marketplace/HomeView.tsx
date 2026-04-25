@@ -1,6 +1,7 @@
-import { Search, MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star } from "lucide-react";
+import { Search, MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star, ShieldCheck, GraduationCap, Eye } from "lucide-react";
 import { categories, services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
+import { useUserData } from "@/contexts/UserDataContext";
 import { cn } from "@/lib/utils";
 
 const iconMap = { Sparkles, HeartPulse, Baby, PawPrint };
@@ -13,6 +14,7 @@ const colorMap: Record<string, string> = {
 
 export const HomeView = () => {
   const { navigate } = useApp();
+  const { defaultAddress } = useUserData();
   const featured = services.slice(0, 3);
 
   return (
@@ -26,10 +28,17 @@ export const HomeView = () => {
             className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
-        <div className="mt-2.5 flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+        <button
+          onClick={() => navigate({ name: "addresses" })}
+          className="mt-2.5 flex w-full items-center gap-1.5 px-1 text-left text-xs text-muted-foreground hover:text-foreground"
+        >
           <MapPin className="h-3.5 w-3.5 text-primary" />
-          <span>12, MG Road, Bengaluru</span>
-        </div>
+          <span className="truncate">
+            {defaultAddress
+              ? `${defaultAddress.label} • ${defaultAddress.line1}`
+              : "Set delivery address"}
+          </span>
+        </button>
       </div>
 
       {/* Categories */}
@@ -99,6 +108,37 @@ export const HomeView = () => {
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* Trust section: Verifications, Trainings, Continuous Monitoring */}
+      <section className="animate-fade-in-up">
+        <div className="mb-3">
+          <h2 className="text-base font-bold text-foreground">Why QuickServe</h2>
+          <p className="text-xs text-muted-foreground">Built for trust and your safety</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl bg-card p-4 shadow-soft">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/15 text-success">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <h3 className="mt-3 text-sm font-bold text-foreground">100% Verified Partners</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Aadhaar, mobile OTP, in-person background checks before they ever go live.</p>
+          </div>
+          <div className="rounded-2xl bg-card p-4 shadow-soft">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <GraduationCap className="h-5 w-5" />
+            </div>
+            <h3 className="mt-3 text-sm font-bold text-foreground">Trained Professionals</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Service-specific skill assessments, soft-skills coaching and ongoing refreshers.</p>
+          </div>
+          <div className="rounded-2xl bg-card p-4 shadow-soft">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <Eye className="h-5 w-5" />
+            </div>
+            <h3 className="mt-3 text-sm font-bold text-foreground">Continuous Monitoring</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Live status, OTP-gated start, optional in-home cam and post-service review for every booking.</p>
+          </div>
         </div>
       </section>
     </div>
