@@ -91,6 +91,15 @@ export interface Booking {
   acceptedBy?: Professional[];
   arrivedAt?: Date;
   confirmedAt?: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  cancelledAt?: Date;
+  cancellationFee?: number;
+  startOtp?: string;
+  paymentStatus?: "pending" | "paid" | "failed" | "refunded";
+  paymentMethod?: string;
+  rating?: number;
+  ratingComment?: string;
   preferences?: ServicePreferences;
   rated?: boolean;
 }
