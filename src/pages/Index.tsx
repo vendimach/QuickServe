@@ -15,6 +15,11 @@ import { PartnerProfile } from "@/components/marketplace/PartnerProfile";
 import { ChatView } from "@/components/marketplace/ChatView";
 import { LiveCam } from "@/components/marketplace/LiveCam";
 import { ReferEarn } from "@/components/marketplace/ReferEarn";
+import { AddressesView } from "@/components/marketplace/AddressesView";
+import { PaymentMethodsView } from "@/components/marketplace/PaymentMethodsView";
+import { EditProfileView } from "@/components/marketplace/EditProfileView";
+import { FaqsView } from "@/components/marketplace/FaqsView";
+import { PartnerOtpView } from "@/components/marketplace/PartnerOtpView";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -64,6 +69,46 @@ const Router = () => {
     return (
       <AppShell title="Refer & Earn" subtitle="Invite friends, earn credits">
         <ReferEarn />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "addresses") {
+    return (
+      <AppShell title="Addresses" subtitle="Manage your saved locations">
+        <AddressesView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "payments") {
+    return (
+      <AppShell title="Payment Methods" subtitle="Cards, UPI, wallets">
+        <PaymentMethodsView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "edit-profile") {
+    return (
+      <AppShell title="Edit Profile" subtitle="Update your details">
+        <EditProfileView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "faqs") {
+    return (
+      <AppShell title="Help Center" subtitle="Searchable FAQs">
+        <FaqsView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "partner-otp") {
+    return (
+      <AppShell title="Verify OTP" subtitle="Enter the start OTP">
+        <PartnerOtpView bookingId={view.bookingId} />
       </AppShell>
     );
   }
