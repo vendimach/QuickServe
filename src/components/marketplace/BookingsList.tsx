@@ -99,8 +99,8 @@ export const BookingsList = () => {
               refunded: "Refunded",
             };
             return (
+              <div key={b.id} className="relative">
               <button
-                key={b.id}
                 onClick={() => {
                   if (b.status === "completed" && !b.rated) {
                     navigate({ name: "rate-booking", bookingId: b.id });
@@ -153,6 +153,7 @@ export const BookingsList = () => {
                   <KeyRound className="h-3 w-3" /> Verify start OTP
                 </button>
               )}
+              </div>
             );
           })}
         </div>
