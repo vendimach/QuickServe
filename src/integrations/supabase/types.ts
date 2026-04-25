@@ -14,12 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
+      bookings: {
+        Row: {
+          address: string
+          arrived_at: string | null
+          booking_type: string
+          category_id: string
+          completed_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          duration: string | null
+          id: string
+          partner_id: string | null
+          payment_method: string | null
+          payment_status: string
+          preferences: Json | null
+          price: number
+          professional_id: string | null
+          professional_name: string | null
+          rating: number | null
+          rating_comment: string | null
+          refund_status: string | null
+          scheduled_at: string | null
+          service_id: string
+          service_name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address: string
+          arrived_at?: string | null
+          booking_type: string
+          category_id: string
+          completed_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          duration?: string | null
+          id?: string
+          partner_id?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          preferences?: Json | null
+          price?: number
+          professional_id?: string | null
+          professional_name?: string | null
+          rating?: number | null
+          rating_comment?: string | null
+          refund_status?: string | null
+          scheduled_at?: string | null
+          service_id: string
+          service_name: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string
+          arrived_at?: string | null
+          booking_type?: string
+          category_id?: string
+          completed_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          duration?: string | null
+          id?: string
+          partner_id?: string | null
+          payment_method?: string | null
+          payment_status?: string
+          preferences?: Json | null
+          price?: number
+          professional_id?: string | null
+          professional_name?: string | null
+          rating?: number | null
+          rating_comment?: string | null
+          refund_status?: string | null
+          scheduled_at?: string | null
+          service_id?: string
+          service_name?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          booking_id: string
+          created_at: string
+          id: string
+          method: string
+          status: string
+          transaction_ref: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          booking_id: string
+          created_at?: string
+          id?: string
+          method?: string
+          status?: string
+          transaction_ref?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          booking_id?: string
+          created_at?: string
+          id?: string
+          method?: string
+          status?: string
+          transaction_ref?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           aadhaar_last4: string
           aadhaar_verified: boolean
           accepted_terms: boolean
+          avatar_url: string | null
+          bio: string | null
           created_at: string
+          email: string | null
           full_name: string
           id: string
           mobile: string
@@ -30,7 +161,10 @@ export type Database = {
           aadhaar_last4: string
           aadhaar_verified?: boolean
           accepted_terms?: boolean
+          avatar_url?: string | null
+          bio?: string | null
           created_at?: string
+          email?: string | null
           full_name: string
           id: string
           mobile: string
@@ -41,12 +175,60 @@ export type Database = {
           aadhaar_last4?: string
           aadhaar_verified?: boolean
           accepted_terms?: boolean
+          avatar_url?: string | null
+          bio?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string
           id?: string
           mobile?: string
           mobile_verified?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      saved_addresses: {
+        Row: {
+          city: string | null
+          created_at: string
+          id: string
+          is_default: boolean
+          label: string
+          latitude: number | null
+          line1: string
+          longitude: number | null
+          pincode: string | null
+          state: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label: string
+          latitude?: number | null
+          line1: string
+          longitude?: number | null
+          pincode?: string | null
+          state?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          latitude?: number | null
+          line1?: string
+          longitude?: number | null
+          pincode?: string | null
+          state?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -85,7 +267,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "customer" | "partner"
+      app_role: "customer" | "partner" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -213,7 +395,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["customer", "partner"],
+      app_role: ["customer", "partner", "admin"],
     },
   },
 } as const
