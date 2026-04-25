@@ -24,7 +24,7 @@ export const BookingsList = () => {
     }
     if (active === "completed") return bookings.filter((b) => b.status === "completed");
     if (active === "cancelled") return bookings.filter((b) => b.status === "cancelled");
-    return bookings.filter((b) => b.status === "refunded" || b.status === "cancelled");
+    return bookings.filter((b) => b.status === "refunded");
   }, [bookings, active]);
 
   return (
@@ -35,7 +35,7 @@ export const BookingsList = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 overflow-x-auto rounded-2xl bg-secondary p-1.5 shadow-soft">
+      <div className="flex items-stretch gap-1.5 overflow-x-auto rounded-2xl bg-secondary p-1.5 shadow-soft">
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = active === t.id;
@@ -44,14 +44,14 @@ export const BookingsList = () => {
               key={t.id}
               onClick={() => setActive(t.id)}
               className={cn(
-                "flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-2 py-2 text-[11px] font-semibold transition-smooth",
+                "flex min-h-[36px] flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-2 py-2 text-[11px] font-semibold leading-none transition-smooth",
                 isActive
                   ? "bg-card text-foreground shadow-soft"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon className="h-3.5 w-3.5" />
-              {t.label}
+              <span>{t.label}</span>
             </button>
           );
         })}
