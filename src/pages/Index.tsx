@@ -15,6 +15,11 @@ import { PartnerProfile } from "@/components/marketplace/PartnerProfile";
 import { ChatView } from "@/components/marketplace/ChatView";
 import { LiveCam } from "@/components/marketplace/LiveCam";
 import { ReferEarn } from "@/components/marketplace/ReferEarn";
+import { SavedAddresses } from "@/components/marketplace/SavedAddresses";
+import { EditProfile } from "@/components/marketplace/EditProfile";
+import { AdminDashboard } from "@/components/marketplace/AdminDashboard";
+import { PaymentScreen } from "@/components/marketplace/PaymentScreen";
+import { AddressProvider } from "@/contexts/AddressContext";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -64,6 +69,38 @@ const Router = () => {
     return (
       <AppShell title="Refer & Earn" subtitle="Invite friends, earn credits">
         <ReferEarn />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "saved-addresses") {
+    return (
+      <AppShell title="Saved Addresses" subtitle="Your delivery locations">
+        <SavedAddresses />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "edit-profile") {
+    return (
+      <AppShell title="Edit Profile" subtitle="Update your information">
+        <EditProfile />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "admin") {
+    return (
+      <AppShell title="Admin Dashboard" subtitle="Marketplace control center">
+        <AdminDashboard />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "payment") {
+    return (
+      <AppShell title="Payment" subtitle="Pay & manage refunds">
+        <PaymentScreen bookingId={view.bookingId} />
       </AppShell>
     );
   }
@@ -151,7 +188,9 @@ const Router = () => {
 
 const Index = () => (
   <AppProvider>
-    <Router />
+    <AddressProvider>
+      <Router />
+    </AddressProvider>
   </AppProvider>
 );
 

@@ -3,6 +3,7 @@ import type { Booking, Role, Service, BookingType, Professional, ServicePreferen
 import { professionals as allPros } from "@/data/services";
 import { useAuth } from "./AuthContext";
 import { useNotifications } from "./NotificationContext";
+import { supabase } from "@/integrations/supabase/client";
 
 type View =
   | { name: "home" }
@@ -19,12 +20,18 @@ type View =
   | { name: "partner-profile"; partnerId: string }
   | { name: "chat"; bookingId: string }
   | { name: "live-cam"; bookingId: string }
-  | { name: "refer-earn" };
+  | { name: "refer-earn" }
+  | { name: "saved-addresses" }
+  | { name: "edit-profile" }
+  | { name: "admin" }
+  | { name: "payment"; bookingId: string };
 
 interface AppContextValue {
   role: Role;
   view: View;
   navigate: (v: View) => void;
+  goBack: () => void;
+  canGoBack: boolean;
   bookings: Booking[];
   createBooking: (
     service: Service,
@@ -48,10 +55,11 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const { role: authRole } = useAuth();
+  const { role: authRole, user } = useAuth();
   const { push } = useNotifications();
   const role: Role = authRole ?? "customer";
   const [view, setView] = useState<View>({ name: "home" });
+  const [history, setHistory] = useState<View[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [availableNow, setAvailableNow] = useState(true);
   const [listedToday, setListedToday] = useState(true);
@@ -59,7 +67,48 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Reset view when role changes
   useEffect(() => {
     setView(role === "partner" ? { name: "partner-dashboard" } : { name: "home" });
+    setHistory([]);
   }, [role]);
+
+  const navigate = (v: View) => {
+    setView((current) => {
+      // Don't push duplicate consecutive entries
+      if (current.name === v.name && JSON.stringify(current) === JSON.stringify(v)) return current;
+      setHistory((h) => [...h, current]);
+      return v;
+    });
+  };
+
+  const goBack = () => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setView(prev);
+      return h.slice(0, -1);
+    });
+  };
+
+  // Hook into browser back button so it navigates within the app instead of leaving
+  useEffect(() => {
+    // Seed a state entry so the first back press fires popstate
+    if (window.history.state?.qsView == null) {
+      window.history.replaceState({ qsView: true }, "");
+    }
+    window.history.pushState({ qsView: true }, "");
+    const onPop = () => {
+      if (history.length > 0) {
+        goBack();
+        // re-push so a future back press still triggers
+        window.history.pushState({ qsView: true }, "");
+      } else {
+        // nothing to go back to inside app — re-push to avoid leaving
+        window.history.pushState({ qsView: true }, "");
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history.length]);
 
   const createBooking: AppContextValue["createBooking"] = (
     service,
@@ -81,6 +130,36 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       preferences,
     };
     setBookings((prev) => [booking, ...prev]);
+    // Persist to DB (best-effort, non-blocking)
+    if (user) {
+      const insertRow = {
+        user_id: user.id,
+        service_id: service.id,
+        service_name: service.name,
+        category_id: service.categoryId,
+        booking_type: type,
+        status: booking.status,
+        scheduled_at: scheduledAt?.toISOString() ?? null,
+        address: booking.address,
+        price: service.price,
+        duration: service.duration,
+        preferences: preferences ? JSON.parse(JSON.stringify(preferences)) : null,
+      };
+      supabase
+        .from("bookings")
+        .insert(insertRow)
+        .select("id")
+        .single()
+        .then(({ data }) => {
+          if (data?.id) {
+            // swap local id with DB id so updates work
+            setBookings((prev) =>
+              prev.map((b) => (b.id === booking.id ? { ...b, id: data.id } : b)),
+            );
+            booking.id = data.id;
+          }
+        });
+    }
     push({
       kind: "info",
       title: type === "instant" ? "Searching for partners" : "Booking request sent",
@@ -131,6 +210,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           : b,
       ),
     );
+    if (user) {
+      supabase
+        .from("bookings")
+        .update({
+          status: "confirmed",
+          professional_id: professional.id,
+          professional_name: professional.name,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq("id", bookingId);
+    }
     push({
       kind: "confirm",
       title: "Booking confirmed",
@@ -160,6 +250,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: "cancelled" } : b)),
     );
+    if (user) supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
     push({ kind: "warning", title: "Booking cancelled" });
   };
 
@@ -167,6 +258,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: "completed" } : b)),
     );
+    if (user) {
+      supabase
+        .from("bookings")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", bookingId);
+    }
     push({ kind: "success", title: "Service completed", body: "Please rate your professional" });
   };
 
@@ -181,7 +278,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       value={{
         role,
         view,
-        navigate: setView,
+        navigate,
+        goBack,
+        canGoBack: history.length > 0,
         bookings,
         createBooking,
         partnerAcceptBooking,
