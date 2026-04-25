@@ -23,6 +23,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useUserData } from "@/contexts/UserDataContext";
 import { cn } from "@/lib/utils";
 
 export const ProfileView = () => {
@@ -30,6 +31,7 @@ export const ProfileView = () => {
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { push } = useNotifications();
+  const { defaultAddress } = useUserData();
 
   const name = profile?.full_name ?? "Guest";
   const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
@@ -147,10 +149,17 @@ export const ProfileView = () => {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold text-foreground">{name}</h2>
-            <div className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
+            <button
+              onClick={() => navigate({ name: "addresses" })}
+              className="mt-1 flex items-start gap-1 text-left text-xs text-muted-foreground hover:text-foreground"
+            >
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-              <span className="line-clamp-2">12, MG Road, Bengaluru 560001</span>
-            </div>
+              <span className="line-clamp-2">
+                {defaultAddress
+                  ? `${defaultAddress.label} • ${defaultAddress.line1}${defaultAddress.city ? `, ${defaultAddress.city}` : ""}`
+                  : "Add a saved address"}
+              </span>
+            </button>
             <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
               {role}
             </span>
