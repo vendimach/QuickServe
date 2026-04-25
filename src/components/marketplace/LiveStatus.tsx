@@ -190,6 +190,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
             <span className="text-[10px] font-semibold text-primary">View ›</span>
           </button>
 
+          {!completed && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button className="flex flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 py-2.5 text-[11px] font-semibold text-primary transition-smooth hover:bg-primary/15">
               <Phone className="h-4 w-4" /> Call
@@ -212,7 +213,8 @@ export const LiveStatus = ({ bookingId }: Props) => {
               <Video className="h-4 w-4" /> {arrived ? "Live Cam" : "Cam soon"}
             </button>
           </div>
-          {!arrived && (
+          )}
+          {!completed && !arrived && (
             <p className="mt-2 text-center text-[10px] text-muted-foreground">
               Live cam unlocks once partner arrives
             </p>
