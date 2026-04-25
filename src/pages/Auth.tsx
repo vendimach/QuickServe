@@ -24,9 +24,9 @@ export default function Auth() {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 lg:relative">
       <div className="w-full max-w-md">
-        <div className="text-center mb-6">
+        <div className="text-center mb-6 lg:absolute lg:top-6 lg:right-6 lg:text-right lg:mb-0 lg:z-10">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary text-primary-foreground shadow-glow mb-3">
             <Sparkles className="h-7 w-7" />
           </div>
