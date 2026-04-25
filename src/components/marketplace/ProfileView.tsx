@@ -134,8 +134,8 @@ export const ProfileView = () => {
     {
       icon: HelpCircle,
       label: "FAQs & Help",
-      value: "Tap the AI bubble for instant help",
-      action: () => push({ kind: "info", title: "Tip", body: "Use the floating AI bubble bottom-right." }),
+      value: "Browse our help center",
+      action: () => navigate({ name: "faqs" }),
       iconColor: "bg-warning/15 text-warning",
     },
   ] as const;
