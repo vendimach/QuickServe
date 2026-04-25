@@ -145,6 +145,14 @@ export const BookingsList = () => {
                   <ChevronRight className="ml-auto mt-1 h-4 w-4 text-muted-foreground" />
                 </div>
               </button>
+              {role === "partner" && (b.status === "confirmed") && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate({ name: "partner-otp", bookingId: b.id }); }}
+                  className="ml-3 mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold text-primary hover:bg-primary/20"
+                >
+                  <KeyRound className="h-3 w-3" /> Verify start OTP
+                </button>
+              )}
             );
           })}
         </div>
