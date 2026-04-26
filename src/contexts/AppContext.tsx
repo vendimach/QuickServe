@@ -192,6 +192,19 @@ const rowToBooking = (r: BookingRow): Booking => {
 
 const generateOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
+const generateBookingId = (): string => {
+  // Prefer the browser's native UUID generator (RFC 4122 v4).
+  // Fallback for older runtimes where crypto.randomUUID is missing.
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { role: authRole, user } = useAuth();
   const { push } = useNotifications();
@@ -277,9 +290,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     paymentMethodLabel,
   ) => {
     const otp = generateOtp();
-    const tempId = `b-${Date.now()}`;
+    // Generate a real UUID up-front so the same id is used for the optimistic
+    // entry, the database row, and any in-flight navigation. This prevents
+    // the matching screen from losing the booking when the DB insert returns.
+    const bookingId = generateBookingId();
     const booking: Booking = {
-      id: tempId,
+      id: bookingId,
       service,
       type,
       status: type === "instant" ? "searching" : "awaiting-customer-confirm",
@@ -299,6 +315,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       supabase
         .from("bookings")
         .insert([{
+          id: bookingId,
           user_id: user.id,
           service_id: service.id,
           service_name: service.name,
@@ -315,16 +332,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }])
         .select()
         .single()
-        .then(({ data, error }) => {
+        .then(({ error }) => {
           if (error) {
             console.error("Failed to persist booking", error);
+            // Roll the optimistic row back so the UI doesn't show a phantom
+            // booking that will never persist.
+            setBookings((prev) => prev.filter((x) => x.id !== bookingId));
             return;
           }
-          if (data) {
-            const real = rowToBooking(data as BookingRow);
-            setBookings((prev) => prev.map((x) => (x.id === tempId ? { ...real, acceptedBy: x.acceptedBy } : x)));
-            booking.id = real.id;
-          }
+          // Realtime UPDATE handler will keep the row in sync from here on;
+          // no id swap is needed because we sent our own id.
         });
     }
 
@@ -343,7 +360,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setTimeout(() => {
           setBookings((prev) =>
             prev.map((b) => {
-              if (b.id !== booking.id && b.id !== tempId) return b;
+              if (b.id !== bookingId) return b;
               if (acceptSimRef.current.has(`${b.id}-${p.id}`)) return b;
               acceptSimRef.current.add(`${b.id}-${p.id}`);
               return { ...b, acceptedBy: [...(b.acceptedBy ?? []), p], status: "awaiting-customer-confirm" };
@@ -353,7 +370,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             supabase
               .from("bookings")
               .update({ status: "awaiting-customer-confirm" })
-              .eq("id", booking.id)
+              .eq("id", bookingId)
               .then(() => {});
           }
           push({

@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus } from "lucide-react";
 import { services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
+import { useUserData } from "@/contexts/UserDataContext";
 import { PreferencesEditor } from "./PreferencesEditor";
 import { cancellationPolicy } from "@/data/services";
 import { cn } from "@/lib/utils";
@@ -22,11 +23,25 @@ const dateOptions = Array.from({ length: 5 }).map((_, i) => {
 export const BookingFlow = ({ serviceId }: Props) => {
   const { navigate, createBooking } = useApp();
   const { preferences } = useMarketplaceData();
+  const { addresses, defaultAddress } = useUserData();
   const service = services.find((s) => s.id === serviceId);
   const [mode, setMode] = useState<"instant" | "scheduled" | null>(null);
   const [date, setDate] = useState<Date>(dateOptions[0]);
   const [time, setTime] = useState<string>(timeSlots[0]);
   const [showPrefs, setShowPrefs] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    defaultAddress?.id ?? null,
+  );
+  const [addressPickerOpen, setAddressPickerOpen] = useState(false);
+
+  // Keep selection in sync if addresses load after first render.
+  const selectedAddress = useMemo(() => {
+    if (selectedAddressId) {
+      const found = addresses.find((a) => a.id === selectedAddressId);
+      if (found) return found;
+    }
+    return defaultAddress;
+  }, [addresses, selectedAddressId, defaultAddress]);
 
   if (!service) return null;
 
@@ -40,7 +55,19 @@ export const BookingFlow = ({ serviceId }: Props) => {
       scheduledAt = new Date(date);
       scheduledAt.setHours(hour, parseInt(mPart), 0, 0);
     }
-    const booking = createBooking(service, mode, scheduledAt, undefined, preferences[service.id]);
+    const addressString = selectedAddress
+      ? `${selectedAddress.label} — ${[selectedAddress.line1, selectedAddress.city, selectedAddress.pincode]
+          .filter(Boolean)
+          .join(", ")}`
+      : undefined;
+    const booking = createBooking(
+      service,
+      mode,
+      scheduledAt,
+      undefined,
+      preferences[service.id],
+      addressString,
+    );
     navigate({ name: "matching", bookingId: booking.id });
   };
 
@@ -149,17 +176,92 @@ export const BookingFlow = ({ serviceId }: Props) => {
         </div>
       )}
 
-      <div className="mt-5 rounded-2xl bg-card p-4 shadow-soft">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-primary" />
-            <div>
-              <p className="text-xs font-semibold text-foreground">Home</p>
-              <p className="text-[11px] text-muted-foreground">12, MG Road, Bengaluru</p>
+      {/* Address selector */}
+      <div className="mt-5 rounded-2xl bg-card shadow-soft">
+        <button
+          type="button"
+          onClick={() => setAddressPickerOpen((v) => !v)}
+          className="flex w-full items-center justify-between p-4 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <MapPin className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-foreground">
+                {selectedAddress ? selectedAddress.label : "Select service address"}
+              </p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {selectedAddress
+                  ? [selectedAddress.line1, selectedAddress.city, selectedAddress.pincode]
+                      .filter(Boolean)
+                      .join(", ")
+                  : "Tap to choose a saved address"}
+              </p>
             </div>
           </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </div>
+          <ChevronRight
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+              addressPickerOpen && "rotate-90",
+            )}
+          />
+        </button>
+
+        {addressPickerOpen && (
+          <div className="space-y-2 border-t border-border p-3">
+            {addresses.length === 0 && (
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                No saved addresses yet.
+              </p>
+            )}
+            {addresses.map((a) => {
+              const active = a.id === (selectedAddress?.id ?? null);
+              return (
+                <button
+                  type="button"
+                  key={a.id}
+                  onClick={() => {
+                    setSelectedAddressId(a.id);
+                    setAddressPickerOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-xl border p-3 text-left transition-smooth",
+                    active
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-card hover:border-primary/40",
+                  )}
+                >
+                  <MapPin
+                    className={cn(
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      active ? "text-primary" : "text-muted-foreground",
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-xs font-bold text-foreground">{a.label}</span>
+                      {a.is_default && (
+                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {[a.line1, a.city, a.pincode].filter(Boolean).join(", ")}
+                    </p>
+                  </div>
+                  {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => navigate({ name: "addresses" })}
+              className="flex w-full items-center justify-center gap-1 rounded-xl bg-secondary py-2 text-[11px] font-semibold text-foreground transition-smooth hover:bg-muted"
+            >
+              <Plus className="h-3.5 w-3.5" /> Manage addresses
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Preferences */}

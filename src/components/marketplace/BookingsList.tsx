@@ -1,5 +1,17 @@
 import { useState, useMemo } from "react";
-import { Calendar, ChevronRight, Zap, CalendarClock, Inbox, RotateCcw, CheckCheck, XCircle, KeyRound } from "lucide-react";
+import {
+  Calendar,
+  ChevronRight,
+  Zap,
+  CalendarClock,
+  Inbox,
+  RotateCcw,
+  CheckCheck,
+  XCircle,
+  KeyRound,
+  Filter,
+  X,
+} from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 
@@ -12,26 +24,159 @@ const tabs: { id: Tab; label: string; icon: typeof Calendar }[] = [
   { id: "refunds", label: "Refunds", icon: RotateCcw },
 ];
 
+const RANGE_DAYS = 30;
+const RANGE_MS = RANGE_DAYS * 24 * 60 * 60 * 1000;
+
+type DateFilter = "all" | "today" | "7d" | "30d";
+const dateFilters: { id: DateFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "today", label: "Today" },
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
+];
+
 export const BookingsList = () => {
   const { bookings, navigate, role } = useApp();
   const [active, setActive] = useState<Tab>("scheduled");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Restrict the entire history view to the last 30 days regardless of tab.
+  // Active "scheduled" bookings always show, since they may pre-date the
+  // window but are still in flight.
+  const recent = useMemo(() => {
+    const cutoff = Date.now() - RANGE_MS;
+    return bookings.filter((b) => {
+      const ts = (b.scheduledAt ?? b.createdAt).getTime();
+      const isActive = ["searching", "awaiting-customer-confirm", "confirmed", "in-progress"].includes(b.status);
+      return isActive || ts >= cutoff;
+    });
+  }, [bookings]);
+
+  const serviceOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    recent.forEach((b) => map.set(b.service.id, b.service.name));
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [recent]);
 
   const filtered = useMemo(() => {
+    let list = recent;
     if (active === "scheduled") {
-      return bookings.filter((b) =>
+      list = list.filter((b) =>
         ["searching", "awaiting-customer-confirm", "confirmed", "in-progress"].includes(b.status),
       );
+    } else if (active === "completed") {
+      list = list.filter((b) => b.status === "completed");
+    } else if (active === "cancelled") {
+      list = list.filter((b) => b.status === "cancelled");
+    } else {
+      list = list.filter((b) => b.status === "refunded");
     }
-    if (active === "completed") return bookings.filter((b) => b.status === "completed");
-    if (active === "cancelled") return bookings.filter((b) => b.status === "cancelled");
-    return bookings.filter((b) => b.status === "refunded");
-  }, [bookings, active]);
+
+    if (serviceFilter !== "all") {
+      list = list.filter((b) => b.service.id === serviceFilter);
+    }
+
+    if (dateFilter !== "all") {
+      const now = Date.now();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const todayStart = start.getTime();
+      const cutoff =
+        dateFilter === "today"
+          ? todayStart
+          : dateFilter === "7d"
+            ? now - 7 * 24 * 60 * 60 * 1000
+            : now - RANGE_MS;
+      list = list.filter((b) => (b.scheduledAt ?? b.createdAt).getTime() >= cutoff);
+    }
+    return list;
+  }, [recent, active, dateFilter, serviceFilter]);
+
+  const filtersActive = dateFilter !== "all" || serviceFilter !== "all";
 
   return (
     <div className="-mt-5 space-y-4 px-5">
       <div className="rounded-2xl bg-card p-4 shadow-card">
-        <h2 className="text-base font-bold text-foreground">Your Bookings</h2>
-        <p className="text-xs text-muted-foreground">Track all your service requests</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-foreground">Your Bookings</h2>
+            <p className="text-xs text-muted-foreground">
+              Showing the last {RANGE_DAYS} days · synced to your account
+            </p>
+          </div>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold transition-smooth",
+              filtersActive || showFilters
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-foreground hover:bg-muted",
+            )}
+          >
+            <Filter className="h-3 w-3" /> Filters
+            {filtersActive && (
+              <span className="ml-1 rounded-full bg-primary-foreground/25 px-1.5 text-[10px]">
+                on
+              </span>
+            )}
+          </button>
+        </div>
+
+        {showFilters && (
+          <div className="mt-3 space-y-3 border-t border-border pt-3">
+            <div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Date
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {dateFilters.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setDateFilter(d.id)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-[11px] font-semibold transition-smooth",
+                      dateFilter === d.id
+                        ? "gradient-primary text-primary-foreground shadow-soft"
+                        : "bg-secondary text-foreground hover:bg-muted",
+                    )}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Service
+              </p>
+              <select
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value)}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground focus:border-primary focus:outline-none"
+              >
+                <option value="all">All services</option>
+                {serviceOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {filtersActive && (
+              <button
+                onClick={() => {
+                  setDateFilter("all");
+                  setServiceFilter("all");
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" /> Clear filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

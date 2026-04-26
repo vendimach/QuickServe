@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import { toast } from "sonner";
 
 export type NotificationKind = "info" | "success" | "warning" | "match" | "confirm";
@@ -22,8 +22,25 @@ interface NotificationContextValue {
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  // Periodically prune notifications older than 48 hours so the inbox stays
+  // recent without requiring a refresh.
+  useEffect(() => {
+    const prune = () => {
+      const cutoff = Date.now() - FORTY_EIGHT_HOURS_MS;
+      setNotifications((prev) => {
+        const next = prev.filter((n) => n.createdAt.getTime() >= cutoff);
+        return next.length === prev.length ? prev : next;
+      });
+    };
+    prune();
+    const id = setInterval(prune, 60 * 1000); // every minute
+    return () => clearInterval(id);
+  }, []);
 
   const push: NotificationContextValue["push"] = useCallback((n) => {
     const item: AppNotification = {
@@ -32,7 +49,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       createdAt: new Date(),
       read: false,
     };
-    setNotifications((prev) => [item, ...prev]);
+    const cutoff = Date.now() - FORTY_EIGHT_HOURS_MS;
+    setNotifications((prev) => [item, ...prev.filter((x) => x.createdAt.getTime() >= cutoff)]);
     const t =
       n.kind === "success" || n.kind === "confirm"
         ? toast.success
