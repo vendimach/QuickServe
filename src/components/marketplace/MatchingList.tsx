@@ -144,7 +144,7 @@ export const MatchingList = ({ bookingId }: Props) => {
           onClick={() => {
             cancelBooking(booking.id);
             // Replace history so Back doesn't return to the matching/payment screen
-            navigate({ name: "bookings" });
+            navigate({ name: "bookings" }, { replace: true });
           }}
           className="mt-6 w-full rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary"
         >
