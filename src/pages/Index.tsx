@@ -20,6 +20,7 @@ import { PaymentMethodsView } from "@/components/marketplace/PaymentMethodsView"
 import { EditProfileView } from "@/components/marketplace/EditProfileView";
 import { FaqsView } from "@/components/marketplace/FaqsView";
 import { PartnerOtpView } from "@/components/marketplace/PartnerOtpView";
+import { BookingSummary } from "@/components/marketplace/BookingSummary";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -109,6 +110,14 @@ const Router = () => {
     return (
       <AppShell title="Verify OTP" subtitle="Enter the start OTP">
         <PartnerOtpView bookingId={view.bookingId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "booking-summary") {
+    return (
+      <AppShell title="Booking Summary" subtitle="Timings, payment & rating">
+        <BookingSummary bookingId={view.bookingId} />
       </AppShell>
     );
   }
