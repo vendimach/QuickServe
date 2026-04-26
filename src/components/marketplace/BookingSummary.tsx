@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft } from "lucide-react";
+import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, Lock } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
@@ -44,6 +44,9 @@ export const BookingSummary = ({ bookingId }: Props) => {
   const refunded = booking.paymentStatus === "refunded";
   const codish = (booking.paymentMethod ?? "").toLowerCase() === "cod";
   const showPay = !paid && !refunded && !codish;
+  // Gate the post-completion flow: payment must be settled (paid, refunded,
+  // or COD) before we reveal the service details + rating sections.
+  const paymentSettled = paid || refunded || codish;
 
   const handlePay = async () => {
     setPaying(true);
@@ -103,31 +106,14 @@ export const BookingSummary = ({ bookingId }: Props) => {
         </div>
         <h2 className="mt-3 text-lg font-bold">Service completed</h2>
         <p className="mt-1 text-xs text-muted-foreground">{booking.service.name}</p>
+        {!paymentSettled && (
+          <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-warning/15 px-3 py-1 text-[11px] font-semibold text-warning">
+            <Lock className="h-3 w-3" /> Complete payment to view details & rate
+          </p>
+        )}
       </div>
 
-      {/* Timings */}
-      <div className="rounded-3xl bg-card p-5 shadow-soft">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-primary" />
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Timings</p>
-        </div>
-        <div className="mt-3 space-y-2 text-sm">
-          <Row label="Booked at" value={fmtTime(booking.createdAt)} />
-          {booking.confirmedAt && <Row label="Confirmed" value={fmtTime(booking.confirmedAt)} />}
-          {booking.arrivedAt && <Row label="Partner arrived" value={fmtTime(booking.arrivedAt)} />}
-          {booking.startedAt && <Row label="Service started" value={fmtTime(booking.startedAt)} />}
-          {booking.completedAt && <Row label="Service ended" value={fmtTime(booking.completedAt)} />}
-          {totalDuration && (
-            <Row label="Total duration" value={totalDuration} highlight />
-          )}
-        </div>
-        <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs">
-          <MapPin className="h-3.5 w-3.5 text-primary" />
-          <span className="truncate text-muted-foreground">{booking.address}</span>
-        </div>
-      </div>
-
-      {/* Payment */}
+      {/* Payment — always visible first */}
       <div className="rounded-3xl bg-card p-5 shadow-soft">
         <div className="flex items-center gap-2">
           <Receipt className="h-4 w-4 text-primary" />
@@ -154,8 +140,32 @@ export const BookingSummary = ({ bookingId }: Props) => {
         )}
       </div>
 
-      {/* Rating */}
-      <div className="rounded-3xl bg-card p-5 shadow-card">
+      {/* Service details — unlocked after payment */}
+      {paymentSettled && (
+        <div className="rounded-3xl bg-card p-5 shadow-soft animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Service details</p>
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            <Row label="Booked at" value={fmtTime(booking.createdAt)} />
+            {booking.confirmedAt && <Row label="Confirmed" value={fmtTime(booking.confirmedAt)} />}
+            {booking.arrivedAt && <Row label="Partner arrived" value={fmtTime(booking.arrivedAt)} />}
+            {booking.startedAt && <Row label="Service started" value={fmtTime(booking.startedAt)} />}
+            {booking.completedAt && <Row label="Service ended" value={fmtTime(booking.completedAt)} />}
+            {totalDuration && <Row label="Total duration" value={totalDuration} highlight />}
+            <Row label="Partner" value={booking.professional.name} />
+          </div>
+          <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs">
+            <MapPin className="h-3.5 w-3.5 text-primary" />
+            <span className="truncate text-muted-foreground">{booking.address}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Rating — only after payment settled */}
+      {paymentSettled && (
+      <div className="rounded-3xl bg-card p-5 shadow-card animate-fade-in-up">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full gradient-primary text-sm font-bold text-primary-foreground">
             {booking.professional.avatar}
@@ -216,6 +226,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
           </>
         )}
       </div>
+      )}
     </div>
   );
 };
