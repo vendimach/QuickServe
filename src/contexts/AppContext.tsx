@@ -26,7 +26,8 @@ export type View =
   | { name: "payments" }
   | { name: "edit-profile" }
   | { name: "faqs" }
-  | { name: "partner-otp"; bookingId: string };
+  | { name: "partner-otp"; bookingId: string }
+  | { name: "booking-summary"; bookingId: string };
 
 // View <-> URL mapping
 export const viewToPath = (v: View): string => {
@@ -51,6 +52,7 @@ export const viewToPath = (v: View): string => {
     case "edit-profile": return "/profile/edit";
     case "faqs": return "/faqs";
     case "partner-otp": return `/partner-otp/${v.bookingId}`;
+    case "booking-summary": return `/summary/${v.bookingId}`;
   }
 };
 
@@ -73,6 +75,7 @@ export const pathToView = (pathname: string, role: Role): View => {
   if (a === "rate" && b) return { name: "rate-booking", bookingId: b };
   if (a === "partner-profile" && b) return { name: "partner-profile", partnerId: b };
   if (a === "partner-otp" && b) return { name: "partner-otp", bookingId: b };
+  if (a === "summary" && b) return { name: "booking-summary", bookingId: b };
   if (a === "chat" && b) return { name: "chat", bookingId: b };
   if (a === "cam" && b) return { name: "live-cam", bookingId: b };
   if (a === "refer-earn") return { name: "refer-earn" };
