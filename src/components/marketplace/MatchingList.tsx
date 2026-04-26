@@ -12,12 +12,12 @@ export const MatchingList = ({ bookingId }: Props) => {
   const { bookings, navigate, customerConfirmPartner, cancelBooking } = useApp();
   const booking = bookings.find((b) => b.id === bookingId);
 
-  // Pre-compute matched pros (interest + availability) for scheduled view
+  // Pre-compute matched pros (interest + availability)
   const matched = useMemo(() => {
     if (!booking) return [];
-    return allPros.filter(
-      (p) => p.categoryIds?.includes(booking.service.categoryId) && p.listedToday,
-    );
+    const list = allPros.filter((p) => p.categoryIds?.includes(booking.service.categoryId));
+    if (booking.type === "instant") return list.filter((p) => p.availableNow);
+    return list.filter((p) => p.listedToday);
   }, [booking]);
 
   useEffect(() => {
@@ -29,8 +29,17 @@ export const MatchingList = ({ bookingId }: Props) => {
   if (!booking) return null;
 
   const accepted = booking.acceptedBy ?? [];
-  const showList = booking.type === "instant" ? accepted : matched;
-  const isSearching = booking.type === "instant" && accepted.length === 0;
+  // For instant: prefer in-memory accepted list (live simulation). If empty
+  // (e.g. user navigated away & came back, or page refresh), fall back to the
+  // seeded matched pros so the list never disappears once the booking exists.
+  const showList =
+    booking.type === "instant"
+      ? accepted.length > 0
+        ? accepted
+        : matched
+      : matched;
+  const isSearching =
+    booking.type === "instant" && accepted.length === 0 && matched.length === 0;
 
   return (
     <div className="-mt-5 px-5 pb-6">
@@ -134,6 +143,7 @@ export const MatchingList = ({ bookingId }: Props) => {
         <button
           onClick={() => {
             cancelBooking(booking.id);
+            // Replace history so Back doesn't return to the matching/payment screen
             navigate({ name: "bookings" });
           }}
           className="mt-6 w-full rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary"
