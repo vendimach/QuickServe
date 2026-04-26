@@ -13,7 +13,7 @@ interface Props {
 const TAGS = ["Punctual", "Polite", "Caring", "Skilled", "Friendly", "Thorough"];
 
 export const RatingForm = ({ bookingId }: Props) => {
-  const { bookings, navigate, markRated } = useApp();
+  const { bookings, navigate, saveRating } = useApp();
   const { addReview } = useMarketplaceData();
   const { profile } = useAuth();
   const { push } = useNotifications();
@@ -27,7 +27,7 @@ export const RatingForm = ({ bookingId }: Props) => {
 
   if (!booking || !booking.professional) return null;
 
-  const submit = () => {
+  const submit = async () => {
     if (rating < 1) {
       push({ kind: "warning", title: "Please pick a star rating" });
       return;
@@ -40,7 +40,11 @@ export const RatingForm = ({ bookingId }: Props) => {
       customerName: profile?.full_name?.split(" ")[0] ?? "You",
       tags,
     });
-    markRated(booking.id);
+    try {
+      await saveRating(booking.id, rating, comment.trim() || undefined);
+    } catch (e) {
+      console.error("save rating failed", e);
+    }
     setDone(true);
     push({ kind: "success", title: "Thanks for your feedback!" });
     setTimeout(() => navigate({ name: "bookings" }), 1200);

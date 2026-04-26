@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -108,10 +109,12 @@ export const AddressesView = () => {
           onSaved={async (a) => {
             try {
               if (editing) {
-                await import("@/contexts/UserDataContext"); // ensure ctx loaded
-                // call updateAddress via window? we'll route through hook below.
+                // Update is handled inside AddressForm directly — nothing to do here.
               } else {
-                await addAddress(a);
+                const saved = await addAddress(a);
+                if (a.is_default && saved) {
+                  await setDefaultAddress(saved.id);
+                }
                 toast.success("Address saved");
               }
             } catch (e: any) {
@@ -129,7 +132,7 @@ export const AddressesView = () => {
 
 interface FormProps {
   existing?: SavedAddress;
-  onSaved: (a: { label: string; line1: string; city?: string; state?: string; pincode?: string; latitude?: number; longitude?: number }) => void;
+  onSaved: (a: { label: string; line1: string; city?: string; state?: string; pincode?: string; latitude?: number; longitude?: number; is_default?: boolean }) => void;
   onCancel: () => void;
 }
 
@@ -142,6 +145,7 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
   const [pincode, setPincode] = useState(existing?.pincode ?? "");
   const [lat, setLat] = useState<number | null>(existing?.latitude ?? null);
   const [lng, setLng] = useState<number | null>(existing?.longitude ?? null);
+  const [makeDefault, setMakeDefault] = useState<boolean>(existing?.is_default ?? false);
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -157,12 +161,12 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
             body: { latlng: `${latitude},${longitude}` },
           });
           if (error) throw error;
-          if (data?.formatted_address) setLine1(data.formatted_address);
-          if (data?.components) {
-            if (data.components.locality) setCity(data.components.locality);
-            if (data.components.administrative_area_level_1) setState(data.components.administrative_area_level_1);
-            if (data.components.postal_code) setPincode(data.components.postal_code);
-          }
+          // Edge function returns: { formatted, line1, city, state, pincode, lat, lng }
+          if (data?.line1) setLine1(data.line1);
+          else if (data?.formatted) setLine1(data.formatted);
+          if (data?.city) setCity(data.city);
+          if (data?.state) setState(data.state);
+          if (data?.pincode) setPincode(data.pincode);
           toast.success("Location detected");
         } catch (e: any) {
           toast.error(`Couldn't reverse-geocode: ${e.message ?? "unknown"}`);
@@ -181,11 +185,11 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
     setSaving(true);
     try {
       if (existing) {
-        await updateAddress(existing.id, { label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined });
+        await updateAddress(existing.id, { label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });
         toast.success("Address updated");
-        onSaved({ label, line1, city, state, pincode });
+        onSaved({ label, line1, city, state, pincode, is_default: makeDefault });
       } else {
-        onSaved({ label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined });
+        onSaved({ label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });
       }
     } finally {
       setSaving(false);
@@ -223,6 +227,13 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
         <Label>State</Label>
         <Input value={state ?? ""} onChange={(e) => setState(e.target.value)} />
       </div>
+      <label className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 cursor-pointer">
+        <Checkbox
+          checked={makeDefault}
+          onCheckedChange={(v) => setMakeDefault(v === true)}
+        />
+        <span className="text-xs font-medium text-foreground">Set as default address</span>
+      </label>
       {lat && lng && (
         <p className="flex items-center gap-1 text-[11px] text-success">
           <CheckCircle2 className="h-3 w-3" /> Pinned at {lat.toFixed(4)}, {lng.toFixed(4)}

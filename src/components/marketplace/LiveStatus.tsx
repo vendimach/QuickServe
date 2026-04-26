@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Flag,
   CreditCard,
+  KeyRound,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { safetyInstructions, cancellationPolicy } from "@/data/services";
@@ -26,9 +27,11 @@ interface Props {
 }
 
 export const LiveStatus = ({ bookingId }: Props) => {
-  const { bookings, navigate, completeBooking, cancelBooking } = useApp();
+  const { bookings, navigate, completeBooking, cancelBooking, partnerStartService, role } = useApp();
   const { profile, user } = useAuth();
   const [paying, setPaying] = useState(false);
+  const [otpInput, setOtpInput] = useState("");
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
   const booking = bookings.find((b) => b.id === bookingId);
   const [now, setNow] = useState(Date.now());
 
@@ -41,6 +44,9 @@ export const LiveStatus = ({ bookingId }: Props) => {
 
   const arrived = booking.status === "in-progress" || !!booking.arrivedAt;
   const completed = booking.status === "completed";
+  const awaitingOtp =
+    arrived && booking.status === "confirmed"; // partner arrived but service not started
+  const isCustomer = role === "customer";
   const paymentPending = booking.paymentStatus !== "paid" && (booking.paymentMethod ?? "").toLowerCase() !== "cod" && booking.status !== "cancelled" && booking.status !== "refunded";
 
   const handlePay = async () => {
@@ -56,6 +62,20 @@ export const LiveStatus = ({ bookingId }: Props) => {
     setPaying(false);
     if (res.paid) toast.success("Payment successful");
     else toast.error(res.reason ?? "Payment failed");
+  };
+
+  const submitOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpInput.length !== 4) return toast.error("Enter the 4-digit OTP");
+    setVerifyingOtp(true);
+    const ok = partnerStartService(booking.id, otpInput);
+    setVerifyingOtp(false);
+    if (!ok) {
+      toast.error("Wrong OTP. Please ask the partner again.");
+      return;
+    }
+    setOtpInput("");
+    toast.success("Service started — timer is running");
   };
 
   // ETA timer countdown
@@ -185,6 +205,44 @@ export const LiveStatus = ({ bookingId }: Props) => {
             </div>
           </div>
         </div>
+
+        {/* Customer enters OTP from partner to start service */}
+        {awaitingOtp && isCustomer && (
+          <form
+            onSubmit={submitOtp}
+            className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5 shadow-card animate-fade-in-up"
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <KeyRound className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Enter start OTP</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Ask {booking.professional.name.split(" ")[0]} for the 4-digit code
+                </p>
+              </div>
+            </div>
+            <input
+              value={otpInput}
+              onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="0000"
+              className="mt-4 w-full rounded-xl border border-border bg-card px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={verifyingOtp || otpInput.length !== 4}
+              className="mt-3 w-full rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
+            >
+              {verifyingOtp ? "Verifying…" : "Start service & timer"}
+            </button>
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Service time will only be calculated after OTP verification.
+            </p>
+          </form>
+        )}
 
         {/* Professional card */}
         <div className="rounded-3xl bg-card p-5 shadow-card">
@@ -358,7 +416,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
                 <button
                   onClick={() => {
                     completeBooking(booking.id);
-                    navigate({ name: "rate-booking", bookingId: booking.id });
+                    navigate({ name: "booking-summary", bookingId: booking.id }, { replace: true });
                   }}
                   className="rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft"
                 >
@@ -371,10 +429,18 @@ export const LiveStatus = ({ bookingId }: Props) => {
 
         {completed && !booking.rated && (
           <button
-            onClick={() => navigate({ name: "rate-booking", bookingId: booking.id })}
+            onClick={() => navigate({ name: "booking-summary", bookingId: booking.id })}
             className="w-full rounded-2xl gradient-primary py-3.5 text-sm font-bold text-primary-foreground shadow-elevated"
           >
-            ⭐ Rate your professional
+            View summary & rate
+          </button>
+        )}
+        {completed && booking.rated && (
+          <button
+            onClick={() => navigate({ name: "booking-summary", bookingId: booking.id })}
+            className="w-full rounded-2xl bg-card py-3 text-sm font-bold text-foreground shadow-soft border border-border"
+          >
+            View booking summary
           </button>
         )}
       </div>

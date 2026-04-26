@@ -102,8 +102,8 @@ export const BookingsList = () => {
               <div key={b.id} className="relative">
               <button
                 onClick={() => {
-                  if (b.status === "completed" && !b.rated) {
-                    navigate({ name: "rate-booking", bookingId: b.id });
+                  if (b.status === "completed") {
+                    navigate({ name: "booking-summary", bookingId: b.id });
                   } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
                     navigate({ name: "matching", bookingId: b.id });
                   } else {
