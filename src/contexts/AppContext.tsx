@@ -83,7 +83,7 @@ export const pathToView = (pathname: string, role: Role): View => {
 interface AppContextValue {
   role: Role;
   view: View;
-  navigate: (v: View) => void;
+  navigate: (v: View, opts?: { replace?: boolean }) => void;
   bookings: Booking[];
   loadingBookings: boolean;
   createBooking: (
@@ -204,8 +204,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Derive view from current URL
   const view = useMemo<View>(() => pathToView(location.pathname, role), [location.pathname, role]);
 
-  const navigate = useCallback((v: View) => {
-    routerNavigate(viewToPath(v));
+  const navigate = useCallback((v: View, opts?: { replace?: boolean }) => {
+    routerNavigate(viewToPath(v), { replace: opts?.replace });
   }, [routerNavigate]);
 
   // Reset view when role changes
