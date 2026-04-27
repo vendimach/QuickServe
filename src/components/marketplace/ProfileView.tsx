@@ -45,7 +45,7 @@ export const ProfileView = () => {
     action?: () => void;
   };
 
-  const rows: Row[] = [
+  const allRows: Row[] = [
     {
       icon: ShieldCheck,
       label: "Aadhaar Verification",
@@ -108,6 +108,10 @@ export const ProfileView = () => {
       iconColor: "bg-muted text-muted-foreground",
     },
   ];
+  // Partners don't need customer-only rows: payments & saved addresses.
+  const rows: Row[] = role === "partner"
+    ? allRows.filter((r) => r.label !== "Payment Methods" && r.label !== "Saved Addresses")
+    : allRows;
 
   const supportRows = [
     {

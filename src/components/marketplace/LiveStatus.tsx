@@ -412,7 +412,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
               >
                 Cancel booking
               </button>
-              {arrived && (
+              {booking.status === "in-progress" && (
                 <button
                   onClick={() => {
                     completeBooking(booking.id);

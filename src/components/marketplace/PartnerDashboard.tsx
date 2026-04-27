@@ -1,21 +1,46 @@
 import { useEffect, useState } from "react";
-import { MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye, CalendarDays, Plus, Trash2 } from "lucide-react";
+import {
+  MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye,
+  CalendarDays, Plus, Trash2, ChevronRight,
+} from "lucide-react";
 import { samplePartnerRequests, professionals } from "@/data/services";
-import type { PartnerRequest, ScheduleSlot, DayOfWeek } from "@/types";
+import type { PartnerRequest, DayOfWeek } from "@/types";
 import { useApp } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { usePartnerData } from "@/contexts/PartnerDataContext";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export const PartnerDashboard = () => {
-  const { availableNow, setAvailableNow, listedToday, setListedToday, bookings } = useApp();
+  const { bookings, navigate } = useApp();
+  const {
+    schedule: dbSchedule,
+    saveSchedule,
+    availableNow,
+    listedToday,
+    setAvailableNow,
+    setListedToday,
+    earningsToday,
+    earningsTotal,
+    jobsCompletedTotal,
+    averageRating,
+  } = usePartnerData();
   const { push } = useNotifications();
   const [requests, setRequests] = useState<PartnerRequest[]>(samplePartnerRequests);
   const [accepted, setAccepted] = useState<PartnerRequest[]>([]);
-  const [schedule, setSchedule] = useState<ScheduleSlot[]>(
-    professionals[0].schedule ?? [{ days: ["Mon", "Wed", "Fri"], start: "17:00", end: "22:00" }],
-  );
+  const [schedule, setSchedule] = useState<{ days: DayOfWeek[]; start: string; end: string }[]>([]);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
+  // Hydrate local form state from persisted schedule
+  useEffect(() => {
+    if (dbSchedule.length > 0) {
+      setSchedule(dbSchedule.map((s) => ({ days: s.days, start: s.start, end: s.end })));
+    } else {
+      setSchedule([{ days: ["Mon", "Wed", "Fri"], start: "17:00", end: "22:00" }]);
+    }
+  }, [dbSchedule]);
 
   // Notify partner when one of their accepted bookings is confirmed by the customer
   useEffect(() => {
@@ -38,6 +63,18 @@ export const PartnerDashboard = () => {
         title: "Job accepted",
         body: `${req.serviceName} • Waiting for customer to confirm`,
       });
+      // Open the job-detail page with the request payload
+      sessionStorage.setItem(`partner-job-${req.id}`, JSON.stringify({
+        id: req.id,
+        serviceName: req.serviceName,
+        type: req.type,
+        scheduledAt: req.scheduledAt?.toISOString(),
+        address: req.address,
+        customerName: req.customerName,
+        price: req.price,
+        startOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+      }));
+      navigate({ name: "partner-job", bookingId: req.id });
       // Simulate customer confirming after a short delay
       setTimeout(() => {
         push({
@@ -70,7 +107,17 @@ export const PartnerDashboard = () => {
   };
   const addSlot = () => setSchedule((prev) => [...prev, { days: ["Mon"], start: "09:00", end: "17:00" }]);
   const removeSlot = (i: number) => setSchedule((prev) => prev.filter((_, idx) => idx !== i));
-  const saveSchedule = () => push({ kind: "success", title: "Schedule updated", body: `${schedule.length} slot(s) saved` });
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true);
+    try {
+      await saveSchedule(schedule.map((s, i) => ({ days: s.days, start: s.start, end: s.end, position: i })));
+      push({ kind: "success", title: "Schedule saved", body: `${schedule.length} slot(s) synced` });
+    } catch (e) {
+      toast.error("Couldn't save schedule");
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
 
   return (
     <div className="space-y-5 px-5 pb-6">
@@ -81,8 +128,8 @@ export const PartnerDashboard = () => {
           title="Available right now"
           subtitle="Get instant booking requests live"
           on={availableNow}
-          onChange={(v) => {
-            setAvailableNow(v);
+          onChange={async (v) => {
+            await setAvailableNow(v);
             push({
               kind: v ? "success" : "info",
               title: v ? "You're live for instant bookings" : "Instant matching paused",
@@ -96,8 +143,8 @@ export const PartnerDashboard = () => {
           title="Show in today's listings"
           subtitle="Customers can see & book you for today"
           on={listedToday}
-          onChange={(v) => {
-            setListedToday(v);
+          onChange={async (v) => {
+            await setListedToday(v);
             push({
               kind: v ? "success" : "info",
               title: v ? "You're listed for today" : "Removed from today's list",
@@ -169,20 +216,21 @@ export const PartnerDashboard = () => {
             <Plus className="h-3.5 w-3.5" /> Add slot
           </button>
           <button
-            onClick={saveSchedule}
-            className="rounded-xl gradient-primary py-2 text-xs font-bold text-primary-foreground shadow-soft"
+            onClick={handleSaveSchedule}
+            disabled={savingSchedule}
+            className="rounded-xl gradient-primary py-2 text-xs font-bold text-primary-foreground shadow-soft disabled:opacity-60"
           >
-            Save schedule
+            {savingSchedule ? "Saving…" : "Save schedule"}
           </button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Live stats — persisted */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { icon: Wallet, label: "Today", value: "₹2,840", color: "text-primary bg-primary/10" },
-          { icon: TrendingUp, label: "Jobs", value: "8", color: "text-accent bg-accent/10" },
-          { icon: Star, label: "Rating", value: "4.9", color: "text-warning bg-warning/15" },
+          { icon: Wallet, label: "Today", value: `₹${earningsToday.toLocaleString("en-IN")}`, color: "text-primary bg-primary/10" },
+          { icon: TrendingUp, label: "Jobs", value: jobsCompletedTotal.toString(), color: "text-accent bg-accent/10" },
+          { icon: Star, label: "Rating", value: averageRating != null ? averageRating.toFixed(1) : "—", color: "text-warning bg-warning/15" },
         ].map((s) => {
           const Icon = s.icon;
           return (
@@ -196,6 +244,23 @@ export const PartnerDashboard = () => {
           );
         })}
       </div>
+
+      {/* Credit account / earnings entry */}
+      <button
+        onClick={() => navigate({ name: "partner-earnings" })}
+        className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 shadow-soft transition-smooth hover:bg-secondary/40"
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/15 text-success">
+          <Wallet className="h-5 w-5" />
+        </div>
+        <div className="flex-1 text-left">
+          <p className="text-sm font-bold text-foreground">Credit account</p>
+          <p className="text-[11px] text-muted-foreground">
+            Lifetime earnings · ₹{earningsTotal.toLocaleString("en-IN")}
+          </p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      </button>
 
       {/* Incoming */}
       <section>
