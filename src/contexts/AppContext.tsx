@@ -4,6 +4,7 @@ import { professionals as allPros, services as allServices } from "@/data/servic
 import { useAuth } from "./AuthContext";
 import { useNotifications } from "./NotificationContext";
 import { supabase } from "@/integrations/supabase/client";
+import { usePartnerData } from "./PartnerDataContext";
 import { useLocation, useNavigate as useRouterNavigate, useParams } from "react-router-dom";
 
 export type View =
@@ -27,7 +28,9 @@ export type View =
   | { name: "edit-profile" }
   | { name: "faqs" }
   | { name: "partner-otp"; bookingId: string }
-  | { name: "booking-summary"; bookingId: string };
+  | { name: "booking-summary"; bookingId: string }
+  | { name: "partner-earnings" }
+  | { name: "partner-job"; bookingId: string };
 
 // View <-> URL mapping
 export const viewToPath = (v: View): string => {
@@ -53,6 +56,8 @@ export const viewToPath = (v: View): string => {
     case "faqs": return "/faqs";
     case "partner-otp": return `/partner-otp/${v.bookingId}`;
     case "booking-summary": return `/summary/${v.bookingId}`;
+    case "partner-earnings": return "/partner/earnings";
+    case "partner-job": return `/partner/job/${v.bookingId}`;
   }
 };
 
@@ -71,6 +76,8 @@ export const pathToView = (pathname: string, role: Role): View => {
   if (a === "profile" && b === "edit") return { name: "edit-profile" };
   if (a === "profile") return { name: "profile" };
   if (a === "notifications") return { name: "notifications" };
+  if (a === "partner" && b === "earnings") return { name: "partner-earnings" };
+  if (a === "partner" && b === "job" && segs[2]) return { name: "partner-job", bookingId: segs[2] };
   if (a === "partner") return { name: "partner-dashboard" };
   if (a === "rate" && b) return { name: "rate-booking", bookingId: b };
   if (a === "partner-profile" && b) return { name: "partner-profile", partnerId: b };
@@ -98,18 +105,13 @@ interface AppContextValue {
     addressOverride?: string,
     paymentMethodLabel?: string,
   ) => Booking;
-  partnerAcceptBooking: (bookingId: string, professional: Professional) => void;
+  partnerAcceptBooking: (bookingId: string, professional: Professional) => Promise<{ ok: boolean; reason?: string }>;
   customerConfirmPartner: (bookingId: string, professional: Professional) => void;
   cancelBooking: (bookingId: string, reason?: string, fee?: number) => void;
   partnerStartService: (bookingId: string, otp: string) => boolean;
   completeBooking: (bookingId: string) => void;
   markRated: (bookingId: string) => void;
   saveRating: (bookingId: string, rating: number, comment?: string) => Promise<void>;
-  // partner availability
-  availableNow: boolean;
-  setAvailableNow: (v: boolean) => void;
-  listedToday: boolean;
-  setListedToday: (v: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -213,8 +215,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const role: Role = authRole ?? "customer";
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
-  const [availableNow, setAvailableNow] = useState(true);
-  const [listedToday, setListedToday] = useState(true);
   const acceptSimRef = useRef<Set<string>>(new Set());
 
   // Derive view from current URL
@@ -384,15 +384,67 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return booking;
   };
 
-  const partnerAcceptBooking: AppContextValue["partnerAcceptBooking"] = (bookingId, professional) => {
+  const partnerAcceptBooking: AppContextValue["partnerAcceptBooking"] = async (bookingId, professional) => {
+    if (!user) return { ok: false, reason: "Sign in required" };
+    const target = bookings.find((x) => x.id === bookingId);
+    if (!target) return { ok: false, reason: "Booking not found" };
+
+    // Conflict detection: only block on scheduled bookings.
+    if (target.type === "scheduled" && target.scheduledAt) {
+      const targetDay = target.scheduledAt.toISOString().slice(0, 10);
+      const targetStart = target.scheduledAt.getTime();
+      const ONE_HOUR = 60 * 60 * 1000;
+      const targetEnd = targetStart + ONE_HOUR; // assumed slot
+      const { data: existing } = await supabase
+        .from("bookings")
+        .select("id, scheduled_at, status, booking_type")
+        .eq("partner_id", user.id)
+        .in("status", ["confirmed", "in-progress", "awaiting-customer-confirm"]);
+      const conflict = (existing ?? []).find((row) => {
+        if (row.booking_type !== "scheduled" || !row.scheduled_at) return false;
+        const rowDate = new Date(row.scheduled_at);
+        const sameDay = rowDate.toISOString().slice(0, 10) === targetDay;
+        if (!sameDay) return false;
+        const rowStart = rowDate.getTime();
+        const rowEnd = rowStart + ONE_HOUR;
+        return rowStart < targetEnd && rowEnd > targetStart || sameDay;
+      });
+      if (conflict) {
+        return { ok: false, reason: "You already have a reservation that day. Please decline or cancel it first." };
+      }
+    }
+
+    // Persist acceptance: assign partner_id and move status forward.
+    // Customer sees the partner in their "accepted by" list automatically via realtime.
+    const newStatus: Booking["status"] = target.type === "instant" ? "awaiting-customer-confirm" : "confirmed";
+    const { error } = await supabase
+      .from("bookings")
+      .update({
+        partner_id: user.id,
+        professional_id: professional.id,
+        professional_name: professional.name,
+        status: newStatus,
+        ...(newStatus === "confirmed" ? { confirmed_at: new Date().toISOString() } : {}),
+      })
+      .eq("id", bookingId);
+    if (error) {
+      console.error("partnerAcceptBooking failed", error);
+      return { ok: false, reason: error.message };
+    }
+
     setBookings((prev) =>
       prev.map((b) =>
         b.id === bookingId
-          ? { ...b, acceptedBy: [...(b.acceptedBy ?? []), professional] }
+          ? { ...b, acceptedBy: [...(b.acceptedBy ?? []), professional], status: newStatus, professional }
           : b,
       ),
     );
-    push({ kind: "success", title: "Job accepted", body: "Waiting for customer confirmation" });
+    push({
+      kind: "success",
+      title: "Job accepted",
+      body: target.type === "instant" ? "Waiting for customer confirmation" : "Reservation confirmed",
+    });
+    return { ok: true };
   };
 
   const customerConfirmPartner: AppContextValue["customerConfirmPartner"] = (bookingId, professional) => {
@@ -545,10 +597,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         completeBooking,
         markRated,
         saveRating,
-        availableNow,
-        setAvailableNow,
-        listedToday,
-        setListedToday,
       }}
     >
       {children}
