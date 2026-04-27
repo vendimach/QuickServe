@@ -34,7 +34,7 @@ export const ChatView = ({ bookingId }: Props) => {
   const peerAvatar = booking.professional?.avatar ?? "C";
 
   return (
-    <div className="-mt-5 flex h-[calc(100vh-12rem)] flex-col px-5 pb-6">
+    <div className="flex h-[calc(100vh-12rem)] flex-col px-5 pb-6">
       <div className="flex items-center justify-between rounded-2xl bg-card p-3 shadow-card">
         <div className="flex items-center gap-3">
           <button

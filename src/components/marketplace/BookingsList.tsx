@@ -97,7 +97,7 @@ export const BookingsList = () => {
   const filtersActive = dateFilter !== "all" || serviceFilter !== "all";
 
   return (
-    <div className="-mt-5 space-y-4 px-5">
+    <div className="space-y-4 px-5">
       <div className="rounded-2xl bg-card p-4 shadow-card">
         <div className="flex items-start justify-between gap-3">
           <div>

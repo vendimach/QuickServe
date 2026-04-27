@@ -32,7 +32,7 @@ export const NotificationsView = () => {
   }, [markAllRead]);
 
   return (
-    <div className="-mt-5 px-5 pb-6">
+    <div className="px-5 pb-6">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           {notifications.length} notification{notifications.length === 1 ? "" : "s"}

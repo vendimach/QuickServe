@@ -18,7 +18,7 @@ export const HomeView = () => {
   const featured = services.slice(0, 3);
 
   return (
-    <div className="-mt-5 space-y-6 px-5">
+    <div className="space-y-6 px-5">
       {/* Search */}
       <div className="rounded-2xl bg-card p-3 shadow-card">
         <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5">

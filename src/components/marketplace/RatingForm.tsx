@@ -52,7 +52,7 @@ export const RatingForm = ({ bookingId }: Props) => {
 
   if (done) {
     return (
-      <div className="-mt-5 px-5 pb-6">
+      <div className="px-5 pb-6">
         <div className="rounded-3xl bg-card p-8 text-center shadow-card">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
             <CheckCircle2 className="h-8 w-8" />
@@ -65,7 +65,7 @@ export const RatingForm = ({ bookingId }: Props) => {
   }
 
   return (
-    <div className="-mt-5 px-5 pb-6">
+    <div className="px-5 pb-6">
       <button
         onClick={() => navigate({ name: "bookings" })}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"

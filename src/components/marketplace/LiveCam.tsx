@@ -15,7 +15,7 @@ export const LiveCam = ({ bookingId }: Props) => {
   if (!booking) return null;
 
   return (
-    <div className="-mt-5 px-5 pb-6">
+    <div className="px-5 pb-6">
       <button
         onClick={() => navigate({ name: "live-status", bookingId })}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"

@@ -73,7 +73,7 @@ export const PartnerDashboard = () => {
   const saveSchedule = () => push({ kind: "success", title: "Schedule updated", body: `${schedule.length} slot(s) saved` });
 
   return (
-    <div className="-mt-5 space-y-5 px-5 pb-6">
+    <div className="space-y-5 px-5 pb-6">
       {/* Two availability switches */}
       <div className="rounded-2xl bg-card p-4 shadow-card space-y-3">
         <SwitchRow

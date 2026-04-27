@@ -106,7 +106,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
       {/* Main panel */}
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background shadow-elevated sm:my-4 sm:min-h-[calc(100vh-2rem)] sm:rounded-3xl sm:overflow-hidden lg:my-0 lg:max-w-none lg:flex-1 lg:rounded-none lg:shadow-none">
         {showHeader && (
-          <header className="gradient-hero relative px-5 pt-6 pb-12 text-primary-foreground lg:pb-16 lg:px-8">
+          <header className="gradient-hero relative px-5 pt-6 pb-6 text-primary-foreground lg:pb-8 lg:px-8">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider opacity-80">
@@ -142,7 +142,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
           </header>
         )}
 
-        <main className="flex-1 overflow-y-auto pb-24 lg:pb-8">
+        <main className="flex-1 overflow-y-auto pt-5 pb-24 lg:pb-8">
           <div className="lg:mx-auto lg:max-w-3xl lg:px-2">{children}</div>
           {isHome && <SiteFooter />}
         </main>
