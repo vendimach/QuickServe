@@ -149,7 +149,7 @@ export const ReferEarn = () => {
   };
 
   return (
-    <div className="-mt-5 space-y-4 px-5 pb-6">
+    <div className="space-y-4 px-5 pb-6">
       <button
         onClick={() => navigate({ name: "profile" })}
         className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"

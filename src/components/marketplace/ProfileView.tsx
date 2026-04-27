@@ -141,7 +141,7 @@ export const ProfileView = () => {
   ] as const;
 
   return (
-    <div className="-mt-5 space-y-4 px-5 pb-6">
+    <div className="space-y-4 px-5 pb-6">
       <div className="rounded-2xl bg-card p-5 shadow-card">
         <div className="flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-full gradient-primary text-xl font-bold text-primary-foreground shadow-soft">
