@@ -21,6 +21,8 @@ import { EditProfileView } from "@/components/marketplace/EditProfileView";
 import { FaqsView } from "@/components/marketplace/FaqsView";
 import { PartnerOtpView } from "@/components/marketplace/PartnerOtpView";
 import { BookingSummary } from "@/components/marketplace/BookingSummary";
+import { PartnerEarningsView } from "@/components/marketplace/PartnerEarningsView";
+import { PartnerJobView } from "@/components/marketplace/PartnerJobView";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -118,6 +120,22 @@ const Router = () => {
     return (
       <AppShell title="Booking Summary" subtitle="Timings, payment & rating">
         <BookingSummary bookingId={view.bookingId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "partner-earnings") {
+    return (
+      <AppShell title="Credit Account" subtitle="Lifetime earnings & history">
+        <PartnerEarningsView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "partner-job") {
+    return (
+      <AppShell title="Job Details" subtitle="Customer, address & OTP">
+        <PartnerJobView bookingId={view.bookingId} />
       </AppShell>
     );
   }
