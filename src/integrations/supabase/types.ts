@@ -119,6 +119,123 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          read: boolean
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          read?: boolean
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          read?: boolean
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      partner_availability: {
+        Row: {
+          available_now: boolean
+          listed_today: boolean
+          partner_id: string
+          updated_at: string
+        }
+        Insert: {
+          available_now?: boolean
+          listed_today?: boolean
+          partner_id: string
+          updated_at?: string
+        }
+        Update: {
+          available_now?: boolean
+          listed_today?: boolean
+          partner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      partner_earnings: {
+        Row: {
+          amount: number
+          booking_id: string
+          created_at: string
+          customer_name: string | null
+          earned_at: string
+          id: string
+          partner_id: string
+          service_name: string
+        }
+        Insert: {
+          amount?: number
+          booking_id: string
+          created_at?: string
+          customer_name?: string | null
+          earned_at?: string
+          id?: string
+          partner_id: string
+          service_name: string
+        }
+        Update: {
+          amount?: number
+          booking_id?: string
+          created_at?: string
+          customer_name?: string | null
+          earned_at?: string
+          id?: string
+          partner_id?: string
+          service_name?: string
+        }
+        Relationships: []
+      }
+      partner_schedule: {
+        Row: {
+          created_at: string
+          days: string[]
+          end_time: string
+          id: string
+          partner_id: string
+          position: number
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days?: string[]
+          end_time: string
+          id?: string
+          partner_id: string
+          position?: number
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: string[]
+          end_time?: string
+          id?: string
+          partner_id?: string
+          position?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payment_methods: {
         Row: {
           brand: string | null
