@@ -6,7 +6,43 @@ interface Props { bookingId: string; }
 
 export const PartnerJobView = ({ bookingId }: Props) => {
   const { bookings, navigate } = useApp();
-  const booking = bookings.find((b) => b.id === bookingId);
+  const realBooking = bookings.find((b) => b.id === bookingId);
+
+  // Fallback: synthetic booking from a sample request stored in sessionStorage
+  let booking = realBooking
+    ? {
+        id: realBooking.id,
+        type: realBooking.type,
+        serviceName: realBooking.service.name,
+        scheduledAt: realBooking.scheduledAt,
+        address: realBooking.address,
+        customerName: "Customer",
+        price: realBooking.service.price,
+        startOtp: realBooking.startOtp ?? "----",
+      }
+    : null;
+
+  if (!booking) {
+    try {
+      const raw = sessionStorage.getItem(`partner-job-${bookingId}`);
+      if (raw) {
+        const j = JSON.parse(raw);
+        booking = {
+          id: j.id,
+          type: j.type,
+          serviceName: j.serviceName,
+          scheduledAt: j.scheduledAt ? new Date(j.scheduledAt) : undefined,
+          address: j.address,
+          customerName: j.customerName ?? "Customer",
+          price: j.price ?? 0,
+          startOtp: j.startOtp ?? "----",
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (!booking) {
     return (
       <div className="px-5 pb-6">
@@ -57,7 +93,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {isInstant ? "Instant Job" : "Scheduled Job"}
             </p>
-            <h2 className="text-base font-bold text-foreground">{booking.service.name}</h2>
+            <h2 className="text-base font-bold text-foreground">{booking.serviceName}</h2>
           </div>
         </div>
 
@@ -74,7 +110,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Customer</span>
             <span className="flex items-center gap-1 font-semibold text-foreground">
-              <UserIcon className="h-3.5 w-3.5 text-primary" /> Customer
+              <UserIcon className="h-3.5 w-3.5 text-primary" /> {booking.customerName}
             </span>
           </div>
           <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
@@ -86,7 +122,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Service fee</span>
-            <span className="font-bold text-success">₹{booking.service.price}</span>
+            <span className="font-bold text-success">₹{booking.price}</span>
           </div>
         </div>
       </div>
@@ -118,7 +154,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
           <Phone className="h-3.5 w-3.5" /> Call customer
         </button>
         <button
-          onClick={() => navigate({ name: "chat", bookingId: booking.id })}
+          onClick={() => navigate({ name: "chat", bookingId: booking!.id })}
           className="flex items-center justify-center gap-1.5 rounded-xl bg-secondary py-2.5 text-xs font-semibold text-foreground"
         >
           <MessageCircle className="h-3.5 w-3.5" /> Chat
