@@ -63,6 +63,18 @@ export const PartnerDashboard = () => {
         title: "Job accepted",
         body: `${req.serviceName} • Waiting for customer to confirm`,
       });
+      // Open the job-detail page with the request payload
+      sessionStorage.setItem(`partner-job-${req.id}`, JSON.stringify({
+        id: req.id,
+        serviceName: req.serviceName,
+        type: req.type,
+        scheduledAt: req.scheduledAt?.toISOString(),
+        address: req.address,
+        customerName: req.customerName,
+        price: req.price,
+        startOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+      }));
+      navigate({ name: "partner-job", bookingId: req.id });
       // Simulate customer confirming after a short delay
       setTimeout(() => {
         push({
