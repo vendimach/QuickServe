@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, Lock } from "lucide-react";
+import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, Lock, StickyNote } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
@@ -160,6 +160,39 @@ export const BookingSummary = ({ bookingId }: Props) => {
             <MapPin className="h-3.5 w-3.5 text-primary" />
             <span className="truncate text-muted-foreground">{booking.address}</span>
           </div>
+        </div>
+      )}
+
+      {/* Preferences / notes — visible whenever payment is settled */}
+      {paymentSettled && booking.preferences && (
+        booking.preferences.notes?.trim() ||
+        (booking.preferences.schedule && booking.preferences.schedule.length > 0)
+      ) && (
+        <div className="rounded-3xl bg-card p-5 shadow-soft animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <StickyNote className="h-4 w-4 text-primary" />
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Preferences & notes
+            </p>
+          </div>
+          {booking.preferences.notes?.trim() && (
+            <p className="mt-3 whitespace-pre-wrap rounded-xl bg-secondary px-3 py-2 text-sm text-foreground">
+              {booking.preferences.notes}
+            </p>
+          )}
+          {booking.preferences.schedule && booking.preferences.schedule.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {booking.preferences.schedule.map((s, i) => (
+                <li
+                  key={`${s.label}-${i}`}
+                  className="flex items-center justify-between rounded-xl bg-secondary px-3 py-2 text-xs"
+                >
+                  <span className="font-semibold text-foreground">{s.label}</span>
+                  <span className="font-mono text-muted-foreground">{s.time}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
