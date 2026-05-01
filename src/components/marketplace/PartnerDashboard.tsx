@@ -8,6 +8,8 @@ import type { PartnerRequest, DayOfWeek } from "@/types";
 import { useApp } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { usePartnerData } from "@/contexts/PartnerDataContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +17,7 @@ const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export const PartnerDashboard = () => {
   const { bookings, navigate } = useApp();
+  const { user } = useAuth();
   const {
     schedule: dbSchedule,
     saveSchedule,
@@ -52,29 +55,63 @@ export const PartnerDashboard = () => {
     }
   }, [bookings]);
 
-  const respond = (id: string, action: "accept" | "decline") => {
+  const respond = async (id: string, action: "accept" | "decline") => {
     const req = requests.find((r) => r.id === id);
     if (!req) return;
     setRequests((prev) => prev.filter((r) => r.id !== id));
     if (action === "accept") {
       setAccepted((prev) => [req, ...prev]);
+      const otp = Math.floor(1000 + Math.random() * 9000).toString();
+      // Persist this acceptance as a real booking row owned by the partner
+      // so it shows up in the partner's history (My Jobs) across sessions.
+      let dbBookingId: string | null = null;
+      if (user) {
+        const { data, error } = await supabase
+          .from("bookings")
+          .insert([{
+            user_id: user.id,
+            partner_id: user.id,
+            professional_id: professionals[0].id,
+            professional_name: professionals[0].name,
+            service_id: req.id,
+            service_name: req.serviceName,
+            category_id: "home",
+            booking_type: req.type,
+            status: "confirmed",
+            scheduled_at: req.scheduledAt?.toISOString() ?? null,
+            address: req.address,
+            price: req.price,
+            payment_status: "pending",
+            start_otp: otp,
+            confirmed_at: new Date().toISOString(),
+          }])
+          .select("id")
+          .single();
+        if (error) {
+          console.error("Failed to persist accepted request", error);
+          toast.error("Couldn't save job to your history");
+        } else {
+          dbBookingId = data.id;
+        }
+      }
       push({
         kind: "success",
         title: "Job accepted",
         body: `${req.serviceName} • Waiting for customer to confirm`,
       });
       // Open the job-detail page with the request payload
-      sessionStorage.setItem(`partner-job-${req.id}`, JSON.stringify({
-        id: req.id,
+      const jobId = dbBookingId ?? req.id;
+      sessionStorage.setItem(`partner-job-${jobId}`, JSON.stringify({
+        id: jobId,
         serviceName: req.serviceName,
         type: req.type,
         scheduledAt: req.scheduledAt?.toISOString(),
         address: req.address,
         customerName: req.customerName,
         price: req.price,
-        startOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+        startOtp: otp,
       }));
-      navigate({ name: "partner-job", bookingId: req.id });
+      navigate({ name: "partner-job", bookingId: jobId });
       // Simulate customer confirming after a short delay
       setTimeout(() => {
         push({
