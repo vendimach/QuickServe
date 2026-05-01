@@ -1,11 +1,16 @@
-import { ArrowLeft, KeyRound, MapPin, Phone, MessageCircle, Calendar, Zap, Clock, User as UserIcon, Copy, Navigation } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, KeyRound, MapPin, Phone, MessageCircle, Calendar, Zap, Clock, User as UserIcon, Copy, Navigation, AlertTriangle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props { bookingId: string; }
 
 export const PartnerJobView = ({ bookingId }: Props) => {
-  const { bookings, navigate } = useApp();
+  const { bookings, navigate, cancelBooking } = useApp();
+  const { user } = useAuth();
+  const [cancelling, setCancelling] = useState(false);
   const realBooking = bookings.find((b) => b.id === bookingId);
 
   // Fallback: synthetic booking from a sample request stored in sessionStorage
@@ -61,6 +66,43 @@ export const PartnerJobView = ({ bookingId }: Props) => {
 
   const isInstant = booking.type === "instant";
   const otp = booking.startOtp ?? "----";
+
+  // Partner-side cancellation fine (deducted from earnings ledger).
+  // Higher fine if the partner already started the job vs. just accepted.
+  const inProgress = realBooking?.status === "in-progress";
+  const partnerFine = inProgress ? 200 : 100;
+
+  const handlePartnerCancel = async () => {
+    if (!realBooking) {
+      toast.error("This sample job can't be cancelled.");
+      return;
+    }
+    const reason = window.prompt(
+      `Cancel this job?\n\nA fine of ₹${partnerFine} will be deducted from your earnings.\n\nOptional reason:`,
+      "",
+    );
+    if (reason === null) return; // user dismissed
+    setCancelling(true);
+    try {
+      cancelBooking(realBooking.id, reason || "Partner cancelled", 0);
+      if (user) {
+        // Record the fine as a negative-amount entry in partner_earnings so
+        // it shows up in the credit account history and reduces totals.
+        const { error } = await supabase.from("partner_earnings").insert({
+          partner_id: user.id,
+          booking_id: realBooking.id,
+          service_name: `Cancellation fine — ${realBooking.service.name}`,
+          amount: -Math.abs(partnerFine),
+          earned_at: new Date().toISOString(),
+        });
+        if (error) console.error("Failed to record partner fine", error);
+      }
+      toast.success(`Job cancelled. ₹${partnerFine} fine applied to your account.`);
+      navigate({ name: "partner-dashboard" });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const copyOtp = async () => {
     try {
@@ -173,6 +215,31 @@ export const PartnerJobView = ({ bookingId }: Props) => {
       <p className="text-center text-[10px] text-muted-foreground">
         Opens turn-by-turn directions to the customer's address.
       </p>
+
+      {/* Partner cancellation with fine */}
+      {realBooking && (realBooking.status === "confirmed" || realBooking.status === "in-progress") && (
+        <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-5 shadow-soft">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <p className="text-xs font-bold uppercase tracking-wider text-destructive">
+              Cancel this job
+            </p>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Cancelling now will deduct{" "}
+            <span className="font-bold text-destructive">₹{partnerFine}</span> from your
+            earnings ledger{inProgress ? " (service already started)" : ""}.
+          </p>
+          <button
+            onClick={handlePartnerCancel}
+            disabled={cancelling}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-destructive/30 bg-card py-2.5 text-xs font-bold text-destructive transition-smooth hover:bg-destructive/5 disabled:opacity-60"
+          >
+            <XCircle className="h-3.5 w-3.5" />
+            {cancelling ? "Cancelling…" : `Cancel job (₹${partnerFine} fine)`}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

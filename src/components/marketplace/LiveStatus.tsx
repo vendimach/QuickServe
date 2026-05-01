@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { payWithRazorpay } from "@/lib/razorpay";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
@@ -16,7 +15,6 @@ import {
   ShieldAlert,
   AlertTriangle,
   Flag,
-  CreditCard,
   KeyRound,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
@@ -28,8 +26,7 @@ interface Props {
 
 export const LiveStatus = ({ bookingId }: Props) => {
   const { bookings, navigate, completeBooking, cancelBooking, partnerStartService, role } = useApp();
-  const { profile, user } = useAuth();
-  const [paying, setPaying] = useState(false);
+  useAuth();
   const [otpInput, setOtpInput] = useState("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const booking = bookings.find((b) => b.id === bookingId);
@@ -47,22 +44,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
   const awaitingOtp =
     arrived && booking.status === "confirmed"; // partner arrived but service not started
   const isCustomer = role === "customer";
-  const paymentPending = booking.paymentStatus !== "paid" && (booking.paymentMethod ?? "").toLowerCase() !== "cod" && booking.status !== "cancelled" && booking.status !== "refunded";
-
-  const handlePay = async () => {
-    setPaying(true);
-    const res = await payWithRazorpay({
-      amount: booking.service.price,
-      bookingId: booking.id,
-      customerName: profile?.full_name,
-      customerEmail: user?.email ?? undefined,
-      customerContact: profile?.mobile,
-      description: booking.service.name,
-    });
-    setPaying(false);
-    if (res.paid) toast.success("Payment successful");
-    else toast.error(res.reason ?? "Payment failed");
-  };
 
   const submitOtp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -364,8 +345,12 @@ export const LiveStatus = ({ bookingId }: Props) => {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Payment</span>
-              <span className={`font-semibold ${booking.paymentStatus === "paid" ? "text-success" : "text-warning"}`}>
-                {booking.paymentStatus === "paid" ? "Paid" : booking.paymentStatus === "refunded" ? "Refunded" : "Pending"}
+              <span className={`font-semibold ${booking.paymentStatus === "paid" ? "text-success" : "text-muted-foreground"}`}>
+                {booking.paymentStatus === "paid"
+                  ? "Paid"
+                  : booking.paymentStatus === "refunded"
+                    ? "Refunded"
+                    : "Due after service"}
               </span>
             </div>
             <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
@@ -376,16 +361,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
               </span>
             </div>
           </div>
-          {paymentPending && (
-            <button
-              onClick={handlePay}
-              disabled={paying}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
-            >
-              <CreditCard className="h-4 w-4" />
-              {paying ? "Opening payment…" : `Pay ₹${booking.service.price} now`}
-            </button>
-          )}
         </div>
 
         {/* Cancellation policy & actions */}
