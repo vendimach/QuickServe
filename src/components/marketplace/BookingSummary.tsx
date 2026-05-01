@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, Lock, StickyNote } from "lucide-react";
+import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, StickyNote } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
@@ -44,9 +44,11 @@ export const BookingSummary = ({ bookingId }: Props) => {
   const refunded = booking.paymentStatus === "refunded";
   const codish = (booking.paymentMethod ?? "").toLowerCase() === "cod";
   const showPay = !paid && !refunded && !codish;
-  // Gate the post-completion flow: payment must be settled (paid, refunded,
-  // or COD) before we reveal the service details + rating sections.
   const paymentSettled = paid || refunded || codish;
+  // Service details, preferences, and rating are visible immediately —
+  // payment is collected at the end (after the service is performed).
+  const cancelled = booking.status === "cancelled" || booking.status === "refunded";
+  const completed = booking.status === "completed";
 
   const handlePay = async () => {
     setPaying(true);
@@ -101,48 +103,20 @@ export const BookingSummary = ({ bookingId }: Props) => {
 
       {/* Hero */}
       <div className="rounded-3xl bg-card p-6 text-center shadow-card animate-fade-in-up">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success">
+        <div className={cn(
+          "mx-auto flex h-14 w-14 items-center justify-center rounded-full",
+          cancelled ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success",
+        )}>
           <CheckCircle2 className="h-8 w-8" />
         </div>
-        <h2 className="mt-3 text-lg font-bold">Service completed</h2>
+        <h2 className="mt-3 text-lg font-bold">
+          {cancelled ? "Booking cancelled" : completed ? "Service completed" : "Booking details"}
+        </h2>
         <p className="mt-1 text-xs text-muted-foreground">{booking.service.name}</p>
-        {!paymentSettled && (
-          <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-warning/15 px-3 py-1 text-[11px] font-semibold text-warning">
-            <Lock className="h-3 w-3" /> Complete payment to view details & rate
-          </p>
-        )}
       </div>
 
-      {/* Payment — always visible first */}
-      <div className="rounded-3xl bg-card p-5 shadow-soft">
-        <div className="flex items-center gap-2">
-          <Receipt className="h-4 w-4 text-primary" />
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment</p>
-        </div>
-        <div className="mt-3 space-y-2 text-sm">
-          <Row label="Amount" value={`₹${booking.service.price}`} />
-          <Row label="Method" value={booking.paymentMethod ?? "—"} />
-          <Row
-            label="Status"
-            value={paid ? "Paid" : refunded ? "Refunded" : codish ? "Cash on completion" : "Pending"}
-            highlight={paid}
-            danger={!paid && !refunded && !codish}
-          />
-        </div>
-        {showPay && (
-          <button
-            onClick={handlePay}
-            disabled={paying}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
-          >
-            <CreditCard className="h-4 w-4" /> {paying ? "Opening payment…" : `Pay ₹${booking.service.price}`}
-          </button>
-        )}
-      </div>
-
-      {/* Service details — unlocked after payment */}
-      {paymentSettled && (
-        <div className="rounded-3xl bg-card p-5 shadow-soft animate-fade-in-up">
+      {/* Service details — always visible */}
+      <div className="rounded-3xl bg-card p-5 shadow-soft animate-fade-in-up">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-primary" />
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Service details</p>
@@ -161,10 +135,9 @@ export const BookingSummary = ({ bookingId }: Props) => {
             <span className="truncate text-muted-foreground">{booking.address}</span>
           </div>
         </div>
-      )}
 
-      {/* Preferences / notes — visible whenever payment is settled */}
-      {paymentSettled && booking.preferences && (
+      {/* Preferences / notes — always visible */}
+      {booking.preferences && (
         booking.preferences.notes?.trim() ||
         (booking.preferences.schedule && booking.preferences.schedule.length > 0)
       ) && (
@@ -196,8 +169,37 @@ export const BookingSummary = ({ bookingId }: Props) => {
         </div>
       )}
 
-      {/* Rating — only after payment settled */}
-      {paymentSettled && (
+      {/* Payment — service is done, collect now */}
+      {completed && (
+        <div className="rounded-3xl bg-card p-5 shadow-soft">
+          <div className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-primary" />
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment</p>
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            <Row label="Amount" value={`₹${booking.service.price}`} />
+            <Row label="Method" value={booking.paymentMethod ?? "—"} />
+            <Row
+              label="Status"
+              value={paid ? "Paid" : refunded ? "Refunded" : codish ? "Cash on completion" : "Pending"}
+              highlight={paid}
+              danger={!paid && !refunded && !codish}
+            />
+          </div>
+          {showPay && (
+            <button
+              onClick={handlePay}
+              disabled={paying}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
+            >
+              <CreditCard className="h-4 w-4" /> {paying ? "Opening payment…" : `Pay ₹${booking.service.price}`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Rating — once service completed */}
+      {completed && (
       <div className="rounded-3xl bg-card p-5 shadow-card animate-fade-in-up">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full gradient-primary text-sm font-bold text-primary-foreground">
