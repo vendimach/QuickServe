@@ -95,13 +95,6 @@ export const ProfileView = () => {
       action: () => navigate({ name: "addresses" }),
     },
     {
-      icon: HelpCircle,
-      label: "FAQs & Help Center",
-      value: "Searchable answers, 24×7",
-      iconColor: "bg-warning/15 text-warning",
-      action: () => navigate({ name: "faqs" }),
-    },
-    {
       icon: Info,
       label: "About Us",
       value: "Version 1.0.0",

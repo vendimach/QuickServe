@@ -1,4 +1,4 @@
-import { ArrowLeft, KeyRound, MapPin, Phone, MessageCircle, Calendar, Zap, Clock, User as UserIcon, Copy } from "lucide-react";
+import { ArrowLeft, KeyRound, MapPin, Phone, MessageCircle, Calendar, Zap, Clock, User as UserIcon, Copy, Navigation } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 
@@ -160,6 +160,19 @@ export const PartnerJobView = ({ bookingId }: Props) => {
           <MessageCircle className="h-3.5 w-3.5" /> Chat
         </button>
       </div>
+
+      {/* Open in Google Maps for navigation */}
+      <a
+        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(booking.address)}&travelmode=driving`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated transition-bounce active:scale-[0.99]"
+      >
+        <Navigation className="h-4 w-4" /> Navigate in Google Maps
+      </a>
+      <p className="text-center text-[10px] text-muted-foreground">
+        Opens turn-by-turn directions to the customer's address.
+      </p>
     </div>
   );
 };

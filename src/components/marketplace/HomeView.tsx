@@ -1,4 +1,4 @@
-import { MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star, ShieldCheck, GraduationCap, Eye } from "lucide-react";
+import { MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star, ShieldCheck, GraduationCap, Eye, CalendarRange, MessageCircle, Mail, CheckCircle2 } from "lucide-react";
 import { categories, services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { useUserData } from "@/contexts/UserDataContext";
@@ -131,6 +131,55 @@ export const HomeView = () => {
             <h3 className="mt-3 text-sm font-bold text-foreground">Continuous Monitoring</h3>
             <p className="mt-1 text-xs text-muted-foreground">Live status, OTP-gated start, optional in-home cam and post-service review for every booking.</p>
           </div>
+        </div>
+      </section>
+
+      {/* Monthly subscription services */}
+      <section className="animate-fade-in-up">
+        <div className="overflow-hidden rounded-2xl bg-card p-5 shadow-card">
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <CalendarRange className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-foreground">Monthly Services</h2>
+              <p className="text-[11px] text-muted-foreground">Long-term plans, fixed person, peace of mind</p>
+            </div>
+          </div>
+
+          <ul className="mt-4 space-y-2.5 text-sm">
+            {[
+              "Personalised, skill-trained professional matched to your home",
+              "Same fixed partner every visit — no rotating strangers",
+              "Priority scheduling & discounted monthly rates",
+              "Dedicated relationship manager & monthly quality audit",
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                <span className="text-foreground">{line}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <a
+              href="https://wa.me/911800123456?text=Hi%20QuickServe%2C%20I%27d%20like%20to%20enquire%20about%20a%20monthly%20service%20plan"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-success/15 py-2.5 text-xs font-bold text-success transition-smooth hover:bg-success/25"
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+            </a>
+            <a
+              href="mailto:monthly@quickserve.app?subject=Monthly%20service%20enquiry"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-primary/10 py-2.5 text-xs font-bold text-primary transition-smooth hover:bg-primary/20"
+            >
+              <Mail className="h-3.5 w-3.5" /> Email us
+            </a>
+          </div>
+          <p className="mt-3 text-center text-[10px] text-muted-foreground">
+            Available across all categories — replies within 2 business hours.
+          </p>
         </div>
       </section>
     </div>

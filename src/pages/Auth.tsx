@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
-import { ShieldCheck, Phone, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { ShieldCheck, Phone, ArrowRight, CheckCircle2, Sparkles, KeyRound, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect } from "react";
 
@@ -61,9 +61,12 @@ export default function Auth() {
 }
 
 function SignInForm() {
+  const [mode, setMode] = useState<"password" | "otp">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +77,104 @@ function SignInForm() {
     else toast.success("Welcome back!");
   };
 
+  const sendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return toast.error("Enter your registered email");
+    setLoading(true);
+    // shouldCreateUser:false → only registered users can request the OTP
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message.includes("not found") || error.message.includes("Signups")
+        ? "No account found for this email. Please sign up first."
+        : error.message);
+      return;
+    }
+    setOtpSent(true);
+    toast.success("OTP sent — check your email");
+  };
+
+  const verifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.replace(/\D/g, "").length < 6) return toast.error("Enter the 6-digit OTP");
+    setLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: otp.trim(),
+      type: "email",
+    });
+    setLoading(false);
+    if (error) return toast.error(error.message);
+    toast.success("Signed in");
+  };
+
+  const switchMode = (m: "password" | "otp") => {
+    setMode(m);
+    setOtpSent(false);
+    setOtp("");
+  };
+
+  if (mode === "otp") {
+    return (
+      <div className="space-y-3 animate-fade-in-up">
+        <div className="grid grid-cols-2 gap-2">
+          <ModePill active={false} onClick={() => switchMode("password")} icon={<Lock className="h-3.5 w-3.5" />} label="Password" />
+          <ModePill active={true} onClick={() => switchMode("otp")} icon={<KeyRound className="h-3.5 w-3.5" />} label="OTP" />
+        </div>
+
+        {!otpSent ? (
+          <form onSubmit={sendOtp} className="space-y-3">
+            <div>
+              <Label htmlFor="otp-email">Registered email</Label>
+              <Input id="otp-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                We'll email a 6-digit code. Only registered accounts can sign in this way.
+              </p>
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Sending…" : "Send OTP"} <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={verifyOtp} className="space-y-3">
+            <div className="flex items-center gap-3 rounded-xl bg-secondary p-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div className="text-sm min-w-0">
+                <p className="font-semibold text-foreground">Enter OTP</p>
+                <p className="truncate text-xs text-muted-foreground">Sent to {email}</p>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="otp-code">6-digit code</Label>
+              <Input id="otp-code" inputMode="numeric" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Verifying…" : "Verify & Sign In"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => { setOtpSent(false); setOtp(""); }}
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+            >
+              Use a different email
+            </button>
+          </form>
+        )}
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={submit} className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <ModePill active={true} onClick={() => switchMode("password")} icon={<Lock className="h-3.5 w-3.5" />} label="Password" />
+        <ModePill active={false} onClick={() => switchMode("otp")} icon={<KeyRound className="h-3.5 w-3.5" />} label="OTP" />
+      </div>
       <div>
         <Label htmlFor="si-email">Email</Label>
         <Input id="si-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -88,6 +187,22 @@ function SignInForm() {
         {loading ? "Signing in…" : "Sign In"} <ArrowRight className="h-4 w-4 ml-1" />
       </Button>
     </form>
+  );
+}
+
+function ModePill({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-smooth ${
+        active
+          ? "bg-primary/10 text-primary border border-primary/30"
+          : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+      }`}
+    >
+      {icon} {label}
+    </button>
   );
 }
 
