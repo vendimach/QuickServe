@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { payWithRazorpay } from "@/lib/razorpay";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
