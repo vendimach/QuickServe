@@ -11,6 +11,7 @@ import {
   KeyRound,
   Filter,
   X,
+  MapPin,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
@@ -243,61 +244,79 @@ export const BookingsList = () => {
               cancelled: "Cancelled",
               refunded: "Refunded",
             };
+            const goToDetails = () => {
+              if (b.status === "completed" || b.status === "refunded" || b.status === "cancelled") {
+                navigate({ name: "booking-summary", bookingId: b.id });
+              } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
+                navigate({ name: "matching", bookingId: b.id });
+              } else if (role === "partner") {
+                navigate({ name: "partner-job", bookingId: b.id });
+              } else {
+                navigate({ name: "live-status", bookingId: b.id });
+              }
+            };
             return (
-              <div key={b.id} className="relative">
-              <button
-                onClick={() => {
-                  if (b.status === "completed") {
-                    navigate({ name: "booking-summary", bookingId: b.id });
-                  } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
-                    navigate({ name: "matching", bookingId: b.id });
-                  } else {
-                    navigate({ name: "live-status", bookingId: b.id });
-                  }
-                }}
-                className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-soft transition-smooth hover:shadow-card"
+              <div
+                key={b.id}
+                className="overflow-hidden rounded-2xl bg-card shadow-soft transition-smooth hover:shadow-card"
               >
-                <div className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-xl",
-                  b.type === "instant" ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent",
-                )}>
-                  {b.type === "instant" ? <Zap className="h-5 w-5" /> : <CalendarClock className="h-5 w-5" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-foreground">{b.service.name}</p>
-                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    {b.scheduledAt
-                      ? b.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })
-                      : b.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
-                  </div>
-                  <span className={cn("mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", statusStyles[b.status])}>
-                    {active === "refunds" ? "Refunded" : labels[b.status]}
-                  </span>
-                  {b.status === "completed" && !b.rated && (
-                    <span className="ml-1 inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
-                      ⭐ Rate
-                    </span>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className={cn(
-                    "text-sm font-bold",
-                    active === "refunds" ? "text-success" : "text-foreground",
-                  )}>
-                    {active === "refunds" ? "+" : ""}₹{b.service.price}
-                  </p>
-                  <ChevronRight className="ml-auto mt-1 h-4 w-4 text-muted-foreground" />
-                </div>
-              </button>
-              {role === "partner" && (b.status === "confirmed") && (
                 <button
-                  onClick={() => navigate({ name: "partner-otp", bookingId: b.id })}
-                  className="absolute bottom-2 right-3 inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-[11px] font-bold text-primary hover:bg-primary/25"
+                  onClick={goToDetails}
+                  className="flex w-full items-center gap-3 p-4 text-left"
                 >
-                  <KeyRound className="h-3 w-3" /> Verify OTP
+                  <div className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    b.type === "instant" ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent",
+                  )}>
+                    {b.type === "instant" ? <Zap className="h-5 w-5" /> : <CalendarClock className="h-5 w-5" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-sm font-bold text-foreground">{b.service.name}</p>
+                      <p className={cn(
+                        "shrink-0 text-sm font-bold",
+                        active === "refunds" ? "text-success" : "text-foreground",
+                      )}>
+                        {active === "refunds" ? "+" : ""}₹{b.service.price}
+                      </p>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      <span className="truncate">
+                        {b.scheduledAt
+                          ? b.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })
+                          : b.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+                      </span>
+                    </div>
+                    {b.address && (
+                      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{b.address}</span>
+                      </div>
+                    )}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", statusStyles[b.status])}>
+                        {active === "refunds" ? "Refunded" : labels[b.status]}
+                      </span>
+                      {b.status === "completed" && !b.rated && (
+                        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
+                          ⭐ Rate
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
-              )}
+                {role === "partner" && b.status === "confirmed" && (
+                  <div className="border-t border-border bg-secondary/40 px-4 py-2">
+                    <button
+                      onClick={() => navigate({ name: "partner-otp", bookingId: b.id })}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-primary/15 px-3 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/25"
+                    >
+                      <KeyRound className="h-3 w-3" /> Verify OTP to start service
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
