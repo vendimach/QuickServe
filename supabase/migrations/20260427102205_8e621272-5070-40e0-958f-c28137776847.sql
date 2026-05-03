@@ -14,19 +14,20 @@ CREATE INDEX IF NOT EXISTS idx_partner_schedule_partner ON public.partner_schedu
 
 ALTER TABLE public.partner_schedule ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "schedule_select_own"
-  ON public.partner_schedule FOR SELECT
-  USING (auth.uid() = partner_id);
-CREATE POLICY "schedule_insert_own"
-  ON public.partner_schedule FOR INSERT
-  WITH CHECK (auth.uid() = partner_id);
-CREATE POLICY "schedule_update_own"
-  ON public.partner_schedule FOR UPDATE
-  USING (auth.uid() = partner_id);
-CREATE POLICY "schedule_delete_own"
-  ON public.partner_schedule FOR DELETE
-  USING (auth.uid() = partner_id);
+DO $$ BEGIN
+  CREATE POLICY "schedule_select_own" ON public.partner_schedule FOR SELECT USING (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "schedule_insert_own" ON public.partner_schedule FOR INSERT WITH CHECK (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "schedule_update_own" ON public.partner_schedule FOR UPDATE USING (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "schedule_delete_own" ON public.partner_schedule FOR DELETE USING (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DROP TRIGGER IF EXISTS trg_partner_schedule_updated_at ON public.partner_schedule;
 CREATE TRIGGER trg_partner_schedule_updated_at
 BEFORE UPDATE ON public.partner_schedule
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
@@ -42,16 +43,17 @@ CREATE TABLE IF NOT EXISTS public.partner_availability (
 
 ALTER TABLE public.partner_availability ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "availability_select_own"
-  ON public.partner_availability FOR SELECT
-  USING (auth.uid() = partner_id);
-CREATE POLICY "availability_insert_own"
-  ON public.partner_availability FOR INSERT
-  WITH CHECK (auth.uid() = partner_id);
-CREATE POLICY "availability_update_own"
-  ON public.partner_availability FOR UPDATE
-  USING (auth.uid() = partner_id);
+DO $$ BEGIN
+  CREATE POLICY "availability_select_own" ON public.partner_availability FOR SELECT USING (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "availability_insert_own" ON public.partner_availability FOR INSERT WITH CHECK (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "availability_update_own" ON public.partner_availability FOR UPDATE USING (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DROP TRIGGER IF EXISTS trg_partner_availability_updated_at ON public.partner_availability;
 CREATE TRIGGER trg_partner_availability_updated_at
 BEFORE UPDATE ON public.partner_availability
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
@@ -72,20 +74,30 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON public.notification
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "notif_select_own"
-  ON public.notifications FOR SELECT
-  USING (auth.uid() = user_id);
-CREATE POLICY "notif_insert_own"
-  ON public.notifications FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "notif_update_own"
-  ON public.notifications FOR UPDATE
-  USING (auth.uid() = user_id);
-CREATE POLICY "notif_delete_own"
-  ON public.notifications FOR DELETE
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "notif_select_own" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "notif_insert_own" ON public.notifications FOR INSERT WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "notif_update_own" ON public.notifications FOR UPDATE USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "notif_delete_own" ON public.notifications FOR DELETE USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+  END IF;
+END $$;
 ALTER TABLE public.notifications REPLICA IDENTITY FULL;
 
 
@@ -105,12 +117,12 @@ CREATE INDEX IF NOT EXISTS idx_partner_earnings_partner ON public.partner_earnin
 
 ALTER TABLE public.partner_earnings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "earnings_select_own"
-  ON public.partner_earnings FOR SELECT
-  USING (auth.uid() = partner_id);
-CREATE POLICY "earnings_insert_own"
-  ON public.partner_earnings FOR INSERT
-  WITH CHECK (auth.uid() = partner_id);
+DO $$ BEGIN
+  CREATE POLICY "earnings_select_own" ON public.partner_earnings FOR SELECT USING (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "earnings_insert_own" ON public.partner_earnings FOR INSERT WITH CHECK (auth.uid() = partner_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 
 -- 5) AUTO-CREATE EARNINGS WHEN BOOKING COMPLETED & PAID ----------------------
@@ -141,7 +153,10 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_create_partner_earning ON public.bookings;
-CREATE TRIGGER trg_create_partner_earning
-AFTER UPDATE OF status, payment_status ON public.bookings
-FOR EACH ROW EXECUTE FUNCTION public.create_partner_earning();
+DO $$
+BEGIN
+  IF to_regclass('public.bookings') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_create_partner_earning ON public.bookings';
+    EXECUTE 'CREATE TRIGGER trg_create_partner_earning AFTER UPDATE OF status, payment_status ON public.bookings FOR EACH ROW EXECUTE FUNCTION public.create_partner_earning()';
+  END IF;
+END $$;

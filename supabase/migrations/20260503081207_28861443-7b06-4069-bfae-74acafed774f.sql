@@ -1,19 +1,6 @@
--- 0) Add 'admin' to app_role enum (visible immediately via direct catalog insert)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e
-    JOIN pg_type t ON t.oid = e.enumtypid
-    WHERE t.typname = 'app_role' AND e.enumlabel = 'admin'
-  ) THEN
-    INSERT INTO pg_enum (enumtypid, enumlabel, enumsortorder)
-    SELECT t.oid, 'admin', (
-      SELECT COALESCE(MAX(enumsortorder), 0) + 1
-      FROM pg_enum WHERE enumtypid = t.oid
-    )
-    FROM pg_type t WHERE t.typname = 'app_role';
-  END IF;
-END $$;
+-- 0) Add 'admin' to app_role enum. Do not use the new value in this migration
+-- because Postgres cannot safely reference a newly-added enum value until commit.
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'admin';
 
 -- 1) saved_addresses
 CREATE TABLE IF NOT EXISTS public.saved_addresses (
@@ -92,7 +79,12 @@ ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   CREATE POLICY "bookings_select_own" ON public.bookings
     FOR SELECT USING (
-      (auth.uid() = user_id) OR (auth.uid() = partner_id) OR has_role(auth.uid(), 'admin'::app_role)
+      (auth.uid() = user_id)
+      OR (auth.uid() = partner_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
@@ -102,13 +94,22 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "bookings_update_own" ON public.bookings
     FOR UPDATE USING (
-      (auth.uid() = user_id) OR (auth.uid() = partner_id) OR has_role(auth.uid(), 'admin'::app_role)
+      (auth.uid() = user_id)
+      OR (auth.uid() = partner_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "bookings_delete_own" ON public.bookings
     FOR DELETE USING (
-      (auth.uid() = user_id) OR has_role(auth.uid(), 'admin'::app_role)
+      (auth.uid() = user_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -145,7 +146,11 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   CREATE POLICY "pay_select_own" ON public.payments
-    FOR SELECT USING ((auth.uid() = user_id) OR has_role(auth.uid(), 'admin'::app_role));
+    FOR SELECT USING ((auth.uid() = user_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      ));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "pay_insert_own" ON public.payments
@@ -153,7 +158,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "pay_update_own" ON public.payments
-    FOR UPDATE USING ((auth.uid() = user_id) OR has_role(auth.uid(), 'admin'::app_role));
+    FOR UPDATE USING ((auth.uid() = user_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      ));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DROP TRIGGER IF EXISTS trg_payments_updated_at ON public.payments;
