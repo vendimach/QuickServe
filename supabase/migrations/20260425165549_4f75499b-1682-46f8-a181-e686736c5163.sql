@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.saved_addresses (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.saved_addresses (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
 
 -- Bookings: OTP verification + better cancellation tracking
 ALTER TABLE public.bookings
