@@ -141,7 +141,10 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_create_partner_earning ON public.bookings;
-CREATE TRIGGER trg_create_partner_earning
-AFTER UPDATE OF status, payment_status ON public.bookings
-FOR EACH ROW EXECUTE FUNCTION public.create_partner_earning();
+DO $$
+BEGIN
+  IF to_regclass('public.bookings') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_create_partner_earning ON public.bookings';
+    EXECUTE 'CREATE TRIGGER trg_create_partner_earning AFTER UPDATE OF status, payment_status ON public.bookings FOR EACH ROW EXECUTE FUNCTION public.create_partner_earning()';
+  END IF;
+END $$;

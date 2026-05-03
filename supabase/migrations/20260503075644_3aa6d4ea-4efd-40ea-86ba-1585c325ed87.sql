@@ -90,7 +90,12 @@ ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   CREATE POLICY "bookings_select_own" ON public.bookings
     FOR SELECT USING (
-      (auth.uid() = user_id) OR (auth.uid() = partner_id) OR has_role(auth.uid(), 'admin'::app_role)
+      (auth.uid() = user_id)
+      OR (auth.uid() = partner_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
@@ -100,13 +105,22 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "bookings_update_own" ON public.bookings
     FOR UPDATE USING (
-      (auth.uid() = user_id) OR (auth.uid() = partner_id) OR has_role(auth.uid(), 'admin'::app_role)
+      (auth.uid() = user_id)
+      OR (auth.uid() = partner_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "bookings_delete_own" ON public.bookings
     FOR DELETE USING (
-      (auth.uid() = user_id) OR has_role(auth.uid(), 'admin'::app_role)
+      (auth.uid() = user_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      )
     );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -147,7 +161,11 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   CREATE POLICY "pay_select_own" ON public.payments
-    FOR SELECT USING ((auth.uid() = user_id) OR has_role(auth.uid(), 'admin'::app_role));
+    FOR SELECT USING ((auth.uid() = user_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      ));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "pay_insert_own" ON public.payments
@@ -155,7 +173,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "pay_update_own" ON public.payments
-    FOR UPDATE USING ((auth.uid() = user_id) OR has_role(auth.uid(), 'admin'::app_role));
+    FOR UPDATE USING ((auth.uid() = user_id)
+      OR EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid() AND role::text = 'admin'
+      ));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DROP TRIGGER IF EXISTS trg_payments_updated_at ON public.payments;
