@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -10,21 +11,46 @@ import { UserDataProvider } from "@/contexts/UserDataContext";
 import { PartnerDataProvider } from "@/contexts/PartnerDataContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
+import Onboarding from "./pages/Onboarding.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
 
-const Protected = ({ children }: { children: React.ReactNode }) => {
-  const { user, profile, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
-        Loading…
-      </div>
-    );
+function Spinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+// /auth — accessible only when NOT logged in (or not fully onboarded)
+const AuthGuard = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading, onboardingStep } = useAuth();
+  if (loading) return <Spinner />;
+  if (user) {
+    return onboardingStep === 5
+      ? <Navigate to="/" replace />
+      : <Navigate to="/onboarding" replace />;
   }
+  return <>{children}</>;
+};
+
+// /onboarding — must be logged in AND onboarding incomplete
+const OnboardingGuard = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading, onboardingStep } = useAuth();
+  if (loading) return <Spinner />;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!profile?.mobile_verified || !profile?.aadhaar_verified) return <Navigate to="/auth" replace />;
+  if (onboardingStep === 5) return <Navigate to="/" replace />;
+  return <>{children}</>;
+};
+
+// / — must be logged in AND fully onboarded
+const Protected = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading, onboardingStep } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (onboardingStep < 5) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
 };
 
@@ -39,26 +65,25 @@ const App = () => (
               <MarketplaceDataProvider>
                 <UserDataProvider>
                   <PartnerDataProvider>
-                  <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route
-                  path="/"
-                  element={
-                    <Protected>
-                      <Index />
-                    </Protected>
-                  }
-                />
-                <Route
-                  path="/*"
-                  element={
-                    <Protected>
-                      <Index />
-                    </Protected>
-                  }
-                />
-                <Route path="*" element={<NotFound />} />
-                  </Routes>
+                    <Routes>
+                      <Route
+                        path="/auth"
+                        element={<AuthGuard><Auth /></AuthGuard>}
+                      />
+                      <Route
+                        path="/onboarding"
+                        element={<OnboardingGuard><Onboarding /></OnboardingGuard>}
+                      />
+                      <Route
+                        path="/"
+                        element={<Protected><Index /></Protected>}
+                      />
+                      <Route
+                        path="/*"
+                        element={<Protected><Index /></Protected>}
+                      />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
                   </PartnerDataProvider>
                 </UserDataProvider>
               </MarketplaceDataProvider>

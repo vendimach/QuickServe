@@ -3,10 +3,12 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Role } from "@/types";
 
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5;
+
 interface ProfileRow {
   full_name: string;
-  mobile: string;
-  aadhaar_last4: string;
+  mobile: string | null;
+  aadhaar_last4: string | null;
   mobile_verified: boolean;
   aadhaar_verified: boolean;
 }
@@ -17,11 +19,20 @@ interface AuthContextValue {
   profile: ProfileRow | null;
   role: Role | null;
   loading: boolean;
+  onboardingStep: OnboardingStep;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function deriveStep(profile: ProfileRow | null, role: Role | null): OnboardingStep {
+  if (!role || !profile?.full_name || !profile?.mobile) return 1;
+  if (!profile.mobile_verified) return 2;
+  if (!profile.aadhaar_last4) return 3;
+  if (!profile.aadhaar_verified) return 4;
+  return 5;
+}
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -32,33 +43,61 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loadProfile = async (uid: string) => {
     const [{ data: p }, { data: r }] = await Promise.all([
-      supabase.from("profiles").select("full_name, mobile, aadhaar_last4, mobile_verified, aadhaar_verified").eq("id", uid).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", uid).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("full_name, mobile, aadhaar_last4, mobile_verified, aadhaar_verified")
+        .eq("id", uid)
+        .maybeSingle(),
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", uid)
+        .maybeSingle(),
     ]);
     setProfile(p ?? null);
     setRole((r?.role as Role | undefined) ?? null);
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+    let cancelled = false;
+
+    // Primary: use getSession to seed state; await profile load before clearing loading
+    supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
+      if (cancelled) return;
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        setTimeout(() => loadProfile(sess.user.id), 0);
+        await loadProfile(sess.user.id);
       } else {
         setProfile(null);
         setRole(null);
       }
+      if (!cancelled) setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session: sess } }) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-      if (sess?.user) loadProfile(sess.user.id).finally(() => setLoading(false));
-      else setLoading(false);
-    });
+    // Secondary: react to auth events (sign in, sign out, token refresh)
+    // Skip INITIAL_SESSION — getSession() handles the first load above
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, sess) => {
+        if (cancelled || event === "INITIAL_SESSION") return;
+        setSession(sess);
+        setUser(sess?.user ?? null);
+        if (sess?.user) {
+          // Defer to avoid calling Supabase inside its own callback
+          setTimeout(() => {
+            if (!cancelled) loadProfile(sess.user.id);
+          }, 0);
+        } else {
+          setProfile(null);
+          setRole(null);
+        }
+      },
+    );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const refreshProfile = async () => {
@@ -72,7 +111,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, role, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        profile,
+        role,
+        loading,
+        onboardingStep: deriveStep(profile, role),
+        signOut,
+        refreshProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

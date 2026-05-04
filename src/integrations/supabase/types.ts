@@ -321,7 +321,7 @@ export type Database = {
       }
       profiles: {
         Row: {
-          aadhaar_last4: string
+          aadhaar_last4: string | null
           aadhaar_verified: boolean
           about: string | null
           accepted_terms: boolean
@@ -332,12 +332,12 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
-          mobile: string
+          mobile: string | null
           mobile_verified: boolean
           updated_at: string
         }
         Insert: {
-          aadhaar_last4: string
+          aadhaar_last4?: string | null
           aadhaar_verified?: boolean
           about?: string | null
           accepted_terms?: boolean
@@ -348,12 +348,12 @@ export type Database = {
           email?: string | null
           full_name: string
           id: string
-          mobile: string
+          mobile?: string | null
           mobile_verified?: boolean
           updated_at?: string
         }
         Update: {
-          aadhaar_last4?: string
+          aadhaar_last4?: string | null
           aadhaar_verified?: boolean
           about?: string | null
           accepted_terms?: boolean
@@ -364,7 +364,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
-          mobile?: string
+          mobile?: string | null
           mobile_verified?: boolean
           updated_at?: string
         }
