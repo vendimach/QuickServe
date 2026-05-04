@@ -104,6 +104,8 @@ interface AppContextValue {
     preferences?: ServicePreferences,
     addressOverride?: string,
     paymentMethodLabel?: string,
+    addressLat?: number,
+    addressLng?: number,
   ) => Booking;
   availableBookings: Booking[];
   partnerAcceptBooking: (bookingId: string, professional: Professional) => Promise<{ ok: boolean; reason?: string }>;
@@ -346,6 +348,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     preferences,
     addressOverride,
     paymentMethodLabel,
+    addressLat,
+    addressLng,
   ) => {
     const bookingId = generateBookingId();
     const booking: Booking = {
@@ -361,9 +365,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       preferences,
       paymentStatus: "pending",
       paymentMethod: paymentMethodLabel,
-      // OTP is generated when a partner accepts, not at booking creation.
-      // This ensures only the partner ever sees the OTP.
       startOtp: undefined,
+      userLat: addressLat,
+      userLng: addressLng,
     };
     setBookings((prev) => [booking, ...prev]);
 
@@ -384,6 +388,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           duration: service.duration,
           preferences: preferences ? JSON.parse(JSON.stringify(preferences)) : null,
           payment_method: paymentMethodLabel ?? null,
+          user_lat: addressLat ?? null,
+          user_lng: addressLng ?? null,
         }])
         .select()
         .single()
@@ -391,25 +397,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           if (error) {
             console.error("Failed to persist booking", error);
             setBookings((prev) => prev.filter((x) => x.id !== bookingId));
-            return;
-          }
-          // Capture user GPS in background after DB row exists
-          if (typeof navigator !== "undefined" && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                const { latitude: lat, longitude: lng } = pos.coords;
-                supabase
-                  .from("bookings")
-                  .update({ user_lat: lat, user_lng: lng })
-                  .eq("id", bookingId)
-                  .then(() => {});
-                setBookings((prev) =>
-                  prev.map((b) => b.id === bookingId ? { ...b, userLat: lat, userLng: lng } : b),
-                );
-              },
-              () => {},
-              { enableHighAccuracy: true, timeout: 8000 },
-            );
           }
         });
     }

@@ -69,6 +69,7 @@ function Step1({ onComplete }: { onComplete: () => Promise<void> }) {
         mobile: cleaned,
         mobile_verified: false,
         aadhaar_verified: false,
+        onboarding_completed: false,
         accepted_terms: true,
       }),
     ]);
@@ -249,7 +250,7 @@ function Step4({ onComplete }: { onComplete: () => Promise<void> }) {
     if (otp.trim() !== demoOtp) { setError("Incorrect OTP — use the demo code shown above"); return; }
     setLoading(true);
     const { error: err } = await supabase.from("profiles")
-      .update({ aadhaar_verified: true })
+      .update({ aadhaar_verified: true, onboarding_completed: true })
       .eq("id", user!.id);
     setLoading(false);
     if (err) { setError(err.message); return; }

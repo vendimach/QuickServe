@@ -8,10 +8,12 @@ import { useApp } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { usePartnerData } from "@/contexts/PartnerDataContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MAX_RADIUS_KM = 30;
+const INSTANT_RADIUS_KM = 10;
+const SCHEDULED_RADIUS_KM = 35;
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -25,7 +27,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 export const PartnerDashboard = () => {
   const { bookings, availableBookings, navigate, partnerAcceptBooking } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const {
     schedule: dbSchedule,
     saveSchedule,
@@ -46,7 +48,11 @@ export const PartnerDashboard = () => {
   const [schedule, setSchedule] = useState<{ days: DayOfWeek[]; start: string; end: string }[]>([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
 
-  // Get partner's current location for radius filtering
+  // Partner's saved home location (from profiles) — used for scheduled booking radius
+  const homeLat = (profile as { home_lat?: number | null } | null)?.home_lat ?? null;
+  const homeLng = (profile as { home_lng?: number | null } | null)?.home_lng ?? null;
+
+  // Get partner's live GPS for instant-booking radius
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -65,11 +71,20 @@ export const PartnerDashboard = () => {
     }
   }, [dbSchedule]);
 
-  // Filter available bookings by 30 km radius (or show all if GPS unavailable)
+  // Distance-aware filtering:
+  //   Instant → partner's LIVE GPS, 10 km
+  //   Scheduled → partner's saved HOME location (profiles.home_lat/lng), 35 km
   const nearbyRequests = availableBookings.filter((b) => {
-    if (!partnerLat || !partnerLng) return true; // no GPS — show all
-    if (!b.userLat || !b.userLng) return true;   // customer has no GPS yet — show
-    return haversineKm(partnerLat, partnerLng, b.userLat, b.userLng) <= MAX_RADIUS_KM;
+    if (!b.userLat || !b.userLng) return true; // booking has no geocoded location — show
+    if (b.type === "scheduled") {
+      const refLat = homeLat ?? partnerLat;
+      const refLng = homeLng ?? partnerLng;
+      if (!refLat || !refLng) return true; // no reference — show
+      return haversineKm(refLat, refLng, b.userLat, b.userLng) <= SCHEDULED_RADIUS_KM;
+    }
+    // instant
+    if (!partnerLat || !partnerLng) return true; // no live GPS — show
+    return haversineKm(partnerLat, partnerLng, b.userLat, b.userLng) <= INSTANT_RADIUS_KM;
   });
 
   // Partner's active jobs (confirmed / in-progress)
@@ -146,6 +161,16 @@ export const PartnerDashboard = () => {
           onChange={async (v) => {
             await setAvailableNow(v);
             push({ kind: v ? "success" : "info", title: v ? "You're live — instant requests enabled" : "Instant requests paused" });
+            // On going live, save current GPS as home location for scheduled booking radius
+            if (v && user && navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                ({ coords }) => {
+                  supabase.from("profiles").update({ home_lat: coords.latitude, home_lng: coords.longitude }).eq("id", user.id).then(() => {});
+                },
+                () => {},
+                { enableHighAccuracy: true, timeout: 8000 },
+              );
+            }
           }}
           color="success"
         />
@@ -304,7 +329,7 @@ export const PartnerDashboard = () => {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-foreground">Instant Requests</h2>
-            <p className="text-[10px] text-muted-foreground">Real-time • within {MAX_RADIUS_KM} km</p>
+            <p className="text-[10px] text-muted-foreground">Real-time • {INSTANT_RADIUS_KM} km instant · {SCHEDULED_RADIUS_KM} km scheduled</p>
           </div>
           {availableNow && nearbyRequests.length > 0 && (
             <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
@@ -328,15 +353,18 @@ export const PartnerDashboard = () => {
             </div>
             <p className="text-sm font-semibold text-foreground">Waiting for requests</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              No new requests within {MAX_RADIUS_KM} km right now. You'll be notified instantly.
+              No new requests within {INSTANT_RADIUS_KM} km right now. You'll be notified instantly.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {nearbyRequests.map((r) => {
+              // For display: instant uses live GPS, scheduled uses home location
+              const refLat = r.type === "scheduled" ? (homeLat ?? partnerLat) : partnerLat;
+              const refLng = r.type === "scheduled" ? (homeLng ?? partnerLng) : partnerLng;
               const distKm =
-                partnerLat && partnerLng && r.userLat && r.userLng
-                  ? haversineKm(partnerLat, partnerLng, r.userLat, r.userLng).toFixed(1) + " km"
+                refLat && refLng && r.userLat && r.userLng
+                  ? haversineKm(refLat, refLng, r.userLat, r.userLng).toFixed(1) + " km"
                   : null;
               return (
                 <div key={r.id} className="overflow-hidden rounded-2xl bg-card shadow-card animate-fade-in-up">

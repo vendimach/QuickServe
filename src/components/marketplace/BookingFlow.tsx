@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus } from "lucide-react";
+import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus, Search } from "lucide-react";
 import { services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
 import { useUserData } from "@/contexts/UserDataContext";
 import { PreferencesEditor } from "./PreferencesEditor";
+import { AddressSearch, type GeoAddress } from "./AddressSearch";
 import { cancellationPolicy } from "@/data/services";
 import { cn } from "@/lib/utils";
 
@@ -33,15 +34,32 @@ export const BookingFlow = ({ serviceId }: Props) => {
     defaultAddress?.id ?? null,
   );
   const [addressPickerOpen, setAddressPickerOpen] = useState(false);
+  const [addrTab, setAddrTab] = useState<"saved" | "search">("saved");
+  const [geoAddress, setGeoAddress] = useState<GeoAddress | null>(null);
 
   // Keep selection in sync if addresses load after first render.
-  const selectedAddress = useMemo(() => {
+  const selectedSavedAddress = useMemo(() => {
     if (selectedAddressId) {
       const found = addresses.find((a) => a.id === selectedAddressId);
       if (found) return found;
     }
     return defaultAddress;
   }, [addresses, selectedAddressId, defaultAddress]);
+
+  // Effective address: geo search result takes priority over saved address
+  const selectedAddress = addrTab === "search" && geoAddress
+    ? {
+        id: "geo",
+        label: geoAddress.line1 || geoAddress.label.split(",")[0],
+        line1: geoAddress.line1,
+        city: geoAddress.city,
+        pincode: geoAddress.pincode,
+        state: geoAddress.state,
+        latitude: geoAddress.lat,
+        longitude: geoAddress.lng,
+        is_default: false,
+      }
+    : selectedSavedAddress;
 
   if (!service) return null;
 
@@ -65,6 +83,9 @@ export const BookingFlow = ({ serviceId }: Props) => {
       undefined,
       preferences[service.id],
       addressString,
+      undefined,
+      selectedAddress.latitude ?? undefined,
+      selectedAddress.longitude ?? undefined,
     );
     // Navigate directly to live-status which handles the "searching" state
     navigate({ name: "live-status", bookingId: booking.id });
@@ -196,7 +217,7 @@ export const BookingFlow = ({ serviceId }: Props) => {
                   ? [selectedAddress.line1, selectedAddress.city, selectedAddress.pincode]
                       .filter(Boolean)
                       .join(", ")
-                  : "Tap to choose a saved address"}
+                  : "Tap to choose or search an address"}
               </p>
             </div>
           </div>
@@ -209,59 +230,97 @@ export const BookingFlow = ({ serviceId }: Props) => {
         </button>
 
         {addressPickerOpen && (
-          <div className="space-y-2 border-t border-border p-3">
-            {addresses.length === 0 && (
-              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-                No saved addresses yet.
-              </p>
-            )}
-            {addresses.map((a) => {
-              const active = a.id === (selectedAddress?.id ?? null);
-              return (
+          <div className="border-t border-border p-3 space-y-3">
+            {/* Tab switch */}
+            <div className="flex rounded-xl bg-secondary p-0.5 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setAddrTab("saved")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 transition-smooth",
+                  addrTab === "saved" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground",
+                )}
+              >
+                <MapPin className="h-3 w-3" /> Saved
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddrTab("search")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 transition-smooth",
+                  addrTab === "search" ? "bg-card text-foreground shadow-soft" : "text-muted-foreground",
+                )}
+              >
+                <Search className="h-3 w-3" /> Search
+              </button>
+            </div>
+
+            {addrTab === "saved" ? (
+              <div className="space-y-2">
+                {addresses.length === 0 && (
+                  <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                    No saved addresses yet.
+                  </p>
+                )}
+                {addresses.map((a) => {
+                  const active = a.id === (selectedSavedAddress?.id ?? null) && addrTab === "saved";
+                  return (
+                    <button
+                      type="button"
+                      key={a.id}
+                      onClick={() => {
+                        setSelectedAddressId(a.id);
+                        setGeoAddress(null);
+                        setAddressPickerOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-2 rounded-xl border p-3 text-left transition-smooth",
+                        active
+                          ? "border-primary bg-primary/5"
+                          : "border-border bg-card hover:border-primary/40",
+                      )}
+                    >
+                      <MapPin className={cn("mt-0.5 h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-xs font-bold text-foreground">{a.label}</span>
+                          {a.is_default && (
+                            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {[a.line1, a.city, a.pincode].filter(Boolean).join(", ")}
+                        </p>
+                      </div>
+                      {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                    </button>
+                  );
+                })}
                 <button
                   type="button"
-                  key={a.id}
-                  onClick={() => {
-                    setSelectedAddressId(a.id);
+                  onClick={() => navigate({ name: "addresses" })}
+                  className="flex w-full items-center justify-center gap-1 rounded-xl bg-secondary py-2 text-[11px] font-semibold text-foreground transition-smooth hover:bg-muted"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Manage addresses
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <AddressSearch
+                  placeholder="Type area, street or landmark…"
+                  onSelect={(r) => {
+                    setGeoAddress(r);
+                    setSelectedAddressId(null);
                     setAddressPickerOpen(false);
                   }}
-                  className={cn(
-                    "flex w-full items-start gap-2 rounded-xl border p-3 text-left transition-smooth",
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card hover:border-primary/40",
-                  )}
-                >
-                  <MapPin
-                    className={cn(
-                      "mt-0.5 h-4 w-4 shrink-0",
-                      active ? "text-primary" : "text-muted-foreground",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-xs font-bold text-foreground">{a.label}</span>
-                      {a.is_default && (
-                        <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">
-                          Default
-                        </span>
-                      )}
-                    </div>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {[a.line1, a.city, a.pincode].filter(Boolean).join(", ")}
-                    </p>
-                  </div>
-                  {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => navigate({ name: "addresses" })}
-              className="flex w-full items-center justify-center gap-1 rounded-xl bg-secondary py-2 text-[11px] font-semibold text-foreground transition-smooth hover:bg-muted"
-            >
-              <Plus className="h-3.5 w-3.5" /> Manage addresses
-            </button>
+                />
+                <p className="text-center text-[11px] text-muted-foreground">
+                  Powered by OpenStreetMap • India only
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

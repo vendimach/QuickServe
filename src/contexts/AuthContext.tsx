@@ -11,6 +11,9 @@ interface ProfileRow {
   aadhaar_last4: string | null;
   mobile_verified: boolean;
   aadhaar_verified: boolean;
+  onboarding_completed: boolean;
+  home_lat: number | null;
+  home_lng: number | null;
 }
 
 interface AuthContextValue {
@@ -27,7 +30,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function deriveStep(profile: ProfileRow | null, role: Role | null): OnboardingStep {
-  if (!role || !profile?.full_name || !profile?.mobile) return 1;
+  if (!role || !profile) return 1;
+  // Existing users (DEFAULT true) and users who finished onboarding go straight to app
+  if (profile.onboarding_completed) return 5;
+  if (!profile.full_name || !profile.mobile) return 1;
   if (!profile.mobile_verified) return 2;
   if (!profile.aadhaar_last4) return 3;
   if (!profile.aadhaar_verified) return 4;
@@ -45,7 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [{ data: p }, { data: r }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("full_name, mobile, aadhaar_last4, mobile_verified, aadhaar_verified")
+        .select("full_name, mobile, aadhaar_last4, mobile_verified, aadhaar_verified, onboarding_completed, home_lat, home_lng")
         .eq("id", uid)
         .maybeSingle(),
       supabase
