@@ -46,6 +46,23 @@ export async function payWithRazorpay(args: PayArgs): Promise<{ paid: boolean; r
     return { paid: false, reason: orderErr?.message ?? orderData?.error ?? "Order failed" };
   }
 
+  // Demo mode: skip the Razorpay checkout widget and auto-verify
+  if (orderData.isDemo) {
+    const { data: vData, error: vErr } = await supabase.functions.invoke("razorpay-verify", {
+      body: {
+        razorpay_order_id: orderData.orderId,
+        razorpay_payment_id: `demo_pay_${Date.now()}`,
+        razorpay_signature: "demo",
+        bookingId: args.bookingId,
+      },
+    });
+    if (vErr || !vData?.verified) {
+      console.error("demo verify failed", vErr, vData);
+      return { paid: false, reason: "Demo payment verification failed" };
+    }
+    return { paid: true };
+  }
+
   return new Promise((resolve) => {
     const rzp = new window.Razorpay!({
       key: orderData.keyId,

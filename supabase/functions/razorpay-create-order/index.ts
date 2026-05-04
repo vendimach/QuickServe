@@ -4,22 +4,35 @@ const corsHeaders = {
 };
 
 // Creates a Razorpay order. Returns the order ID + key for the client checkout.
+// Falls back to demo mode when Razorpay keys are not configured.
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const KEY_ID = Deno.env.get("RAZORPAY_KEY_ID");
-    const KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET");
-    if (!KEY_ID || !KEY_SECRET) {
-      throw new Error("Razorpay keys not configured");
-    }
-
     const body = await req.json();
     const amount = Number(body?.amount);
     const bookingId = String(body?.bookingId ?? "");
     if (!amount || amount <= 0) throw new Error("Invalid amount");
+
+    const KEY_ID = Deno.env.get("RAZORPAY_KEY_ID");
+    const KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET");
+
+    // Demo mode: when keys are absent return a mock order so the UI can
+    // complete the full payment flow without a real Razorpay account.
+    if (!KEY_ID || !KEY_SECRET) {
+      return new Response(
+        JSON.stringify({
+          orderId: `demo_order_${Date.now()}`,
+          amount: Math.round(amount * 100),
+          currency: "INR",
+          keyId: "demo",
+          isDemo: true,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const auth = btoa(`${KEY_ID}:${KEY_SECRET}`);
     const orderRes = await fetch("https://api.razorpay.com/v1/orders", {
@@ -29,7 +42,7 @@ Deno.serve(async (req) => {
         Authorization: `Basic ${auth}`,
       },
       body: JSON.stringify({
-        amount: Math.round(amount * 100), // paise
+        amount: Math.round(amount * 100),
         currency: "INR",
         receipt: bookingId || `bk_${Date.now()}`,
         notes: { bookingId },

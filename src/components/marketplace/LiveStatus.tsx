@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Flag,
   KeyRound,
+  Loader2,
+  Search,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { safetyInstructions, cancellationPolicy } from "@/data/services";
@@ -37,7 +39,69 @@ export const LiveStatus = ({ bookingId }: Props) => {
     return () => clearInterval(id);
   }, []);
 
-  if (!booking || !booking.professional) return null;
+  if (!booking) return null;
+
+  // Show "Finding partner…" screen while the booking is still searching
+  if (booking.status === "searching") {
+    return (
+      <div className="px-5 pb-6">
+        <button
+          onClick={() => navigate({ name: "bookings" })}
+          className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
+        >
+          <X className="h-3.5 w-3.5" /> Close
+        </button>
+        <div className="space-y-4 animate-fade-in-up">
+          <div className="rounded-3xl bg-card p-6 text-center shadow-card">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+              <Search className="h-7 w-7 animate-pulse text-primary" />
+            </div>
+            <h2 className="mt-4 text-lg font-bold text-foreground">Finding your partner</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Looking for available professionals near you…
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-1.5">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-xs font-medium text-primary">Searching nearby partners</span>
+            </div>
+          </div>
+          <div className="rounded-3xl bg-card p-5 shadow-soft">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking details</p>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Service</span>
+                <span className="font-semibold text-foreground">{booking.service.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-bold text-primary">₹{booking.service.price}</span>
+              </div>
+              <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
+                <span className="text-muted-foreground">Address</span>
+                <span className="flex items-center gap-1 text-right font-semibold text-foreground">
+                  <MapPin className="h-3 w-3 text-primary shrink-0" />
+                  {booking.address}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (window.confirm("Cancel this booking?")) {
+                cancelBooking(booking.id);
+                navigate({ name: "bookings" });
+              }
+            }}
+            className="w-full rounded-2xl border border-destructive/30 bg-card py-3 text-sm font-bold text-destructive shadow-soft"
+          >
+            Cancel booking
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!booking.professional) return null;
 
   const arrived = booking.status === "in-progress" || !!booking.arrivedAt;
   const completed = booking.status === "completed";

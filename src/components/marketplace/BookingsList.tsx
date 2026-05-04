@@ -236,7 +236,7 @@ export const BookingsList = () => {
               refunded: "bg-success/15 text-success",
             };
             const labels: Record<string, string> = {
-              searching: "Searching",
+              searching: "Finding Partner",
               "awaiting-customer-confirm": "Choose Partner",
               confirmed: "Confirmed",
               "in-progress": "In Progress",
@@ -247,8 +247,10 @@ export const BookingsList = () => {
             const goToDetails = () => {
               if (b.status === "completed" || b.status === "refunded" || b.status === "cancelled") {
                 navigate({ name: "booking-summary", bookingId: b.id });
-              } else if (b.status === "awaiting-customer-confirm" || b.status === "searching") {
+              } else if (b.status === "awaiting-customer-confirm") {
                 navigate({ name: "matching", bookingId: b.id });
+              } else if (b.status === "searching") {
+                navigate({ name: "live-status", bookingId: b.id });
               } else if (role === "partner") {
                 navigate({ name: "partner-job", bookingId: b.id });
               } else {

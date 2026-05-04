@@ -105,6 +105,7 @@ interface AppContextValue {
     addressOverride?: string,
     paymentMethodLabel?: string,
   ) => Booking;
+  availableBookings: Booking[];
   partnerAcceptBooking: (bookingId: string, professional: Professional) => Promise<{ ok: boolean; reason?: string }>;
   customerConfirmPartner: (bookingId: string, professional: Professional) => void;
   cancelBooking: (bookingId: string, reason?: string, fee?: number) => void;
@@ -119,6 +120,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 // DB row -> Booking type
 type BookingRow = {
   id: string;
+  user_id: string;
   service_id: string;
   service_name: string;
   category_id: string;
@@ -134,6 +136,8 @@ type BookingRow = {
   cancellation_fee: number | null;
   professional_id: string | null;
   professional_name: string | null;
+  partner_id: string | null;
+  partner_user_id: string | null;
   address: string;
   preferences: unknown;
   rating: number | null;
@@ -142,6 +146,10 @@ type BookingRow = {
   payment_method: string | null;
   start_otp: string | null;
   price: number;
+  user_lat: number | null;
+  user_lng: number | null;
+  partner_lat: number | null;
+  partner_lng: number | null;
 };
 
 const rowToBooking = (r: BookingRow): Booking => {
@@ -189,6 +197,11 @@ const rowToBooking = (r: BookingRow): Booking => {
     paymentMethod: r.payment_method ?? undefined,
     startOtp: r.start_otp ?? undefined,
     acceptedBy: [],
+    userLat: r.user_lat ?? undefined,
+    userLng: r.user_lng ?? undefined,
+    partnerLat: r.partner_lat ?? undefined,
+    partnerLng: r.partner_lng ?? undefined,
+    partnerUserId: r.partner_user_id ?? undefined,
   };
 };
 
@@ -214,8 +227,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const role: Role = authRole ?? "customer";
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [availableBookings, setAvailableBookings] = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
-  const acceptSimRef = useRef<Set<string>>(new Set());
 
   // Derive view from current URL
   const view = useMemo<View>(() => pathToView(location.pathname, role), [location.pathname, role]);
@@ -236,39 +249,72 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user) {
       setBookings([]);
+      setAvailableBookings([]);
       return;
     }
     let mounted = true;
     setLoadingBookings(true);
+
+    // Own bookings (created by or assigned to this user)
     supabase
       .from("bookings")
       .select("*")
+      .or(`user_id.eq.${user.id},partner_id.eq.${user.id}`)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (!mounted) return;
         setLoadingBookings(false);
-        if (error) {
-          console.error("Failed to load bookings", error);
-          return;
-        }
+        if (error) { console.error("Failed to load bookings", error); return; }
         setBookings((data as BookingRow[]).map(rowToBooking));
       });
 
+    // Available searching bookings for partners
+    if (role === "partner") {
+      supabase
+        .from("bookings")
+        .select("*")
+        .eq("status", "searching")
+        .is("partner_id", null)
+        .neq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .then(({ data }) => {
+          if (!mounted || !data) return;
+          setAvailableBookings((data as BookingRow[]).map(rowToBooking));
+        });
+    }
+
     const channel = supabase
-      .channel(`bookings-${user.id}`)
+      .channel(`bookings-${user.id}-${role}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings" },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            const b = rowToBooking(payload.new as BookingRow);
-            setBookings((prev) => (prev.find((x) => x.id === b.id) ? prev : [b, ...prev]));
+            const row = payload.new as BookingRow;
+            const b = rowToBooking(row);
+            // Route to availableBookings if it's a searching booking from another user (partner sees it)
+            if (role === "partner" && b.status === "searching" && row.user_id !== user.id && !row.partner_id) {
+              setAvailableBookings((prev) => prev.find((x) => x.id === b.id) ? prev : [b, ...prev]);
+            } else {
+              setBookings((prev) => prev.find((x) => x.id === b.id) ? prev : [b, ...prev]);
+            }
           } else if (payload.eventType === "UPDATE") {
-            const b = rowToBooking(payload.new as BookingRow);
-            setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x)));
+            const row = payload.new as BookingRow;
+            const b = rowToBooking(row);
+            // Remove from availableBookings when no longer searching or has been accepted
+            if (b.status !== "searching" || row.partner_id) {
+              setAvailableBookings((prev) => prev.filter((x) => x.id !== b.id));
+            } else if (role === "partner" && b.status === "searching" && !row.partner_id && row.user_id !== user.id) {
+              setAvailableBookings((prev) => prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x));
+            }
+            // Update in own bookings if user is involved
+            if (row.user_id === user.id || row.partner_id === user.id) {
+              setBookings((prev) => prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x));
+            }
           } else if (payload.eventType === "DELETE") {
             const id = (payload.old as { id: string }).id;
             setBookings((prev) => prev.filter((x) => x.id !== id));
+            setAvailableBookings((prev) => prev.filter((x) => x.id !== id));
           }
         },
       )
@@ -278,31 +324,28 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       mounted = false;
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, role]);
 
   const createBooking: AppContextValue["createBooking"] = (
     service,
     type,
     scheduledAt,
-    initialPro,
+    _initialPro,
     preferences,
     addressOverride,
     paymentMethodLabel,
   ) => {
     const otp = generateOtp();
-    // Generate a real UUID up-front so the same id is used for the optimistic
-    // entry, the database row, and any in-flight navigation. This prevents
-    // the matching screen from losing the booking when the DB insert returns.
     const bookingId = generateBookingId();
     const booking: Booking = {
       id: bookingId,
       service,
       type,
-      status: type === "instant" ? "searching" : "awaiting-customer-confirm",
+      status: "searching",
       scheduledAt,
       createdAt: new Date(),
       address: addressOverride ?? "Home — 12, MG Road, Bengaluru",
-      acceptedBy: type === "scheduled" && initialPro ? [initialPro] : [],
+      acceptedBy: [],
       professional: undefined,
       preferences,
       paymentStatus: "pending",
@@ -321,7 +364,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           service_name: service.name,
           category_id: service.categoryId,
           booking_type: type,
-          status: booking.status,
+          status: "searching",
           scheduled_at: scheduledAt?.toISOString() ?? null,
           address: booking.address,
           price: service.price,
@@ -335,174 +378,109 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .then(({ error }) => {
           if (error) {
             console.error("Failed to persist booking", error);
-            // Roll the optimistic row back so the UI doesn't show a phantom
-            // booking that will never persist.
             setBookings((prev) => prev.filter((x) => x.id !== bookingId));
             return;
           }
-          // Realtime UPDATE handler will keep the row in sync from here on;
-          // no id swap is needed because we sent our own id.
+          // Capture user GPS in background after DB row exists
+          if (typeof navigator !== "undefined" && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const { latitude: lat, longitude: lng } = pos.coords;
+                supabase
+                  .from("bookings")
+                  .update({ user_lat: lat, user_lng: lng })
+                  .eq("id", bookingId)
+                  .then(() => {});
+                setBookings((prev) =>
+                  prev.map((b) => b.id === bookingId ? { ...b, userLat: lat, userLng: lng } : b),
+                );
+              },
+              () => {},
+              { enableHighAccuracy: true, timeout: 8000 },
+            );
+          }
         });
     }
 
     push({
       kind: "info",
-      title: type === "instant" ? "Searching for partners" : "Booking request sent",
+      title: "Searching for partners",
       body: `${service.name} • Awaiting partner acceptances`,
     });
 
-    // Simulate partners accepting over time for instant bookings
-    if (type === "instant") {
-      const matches = allPros
-        .filter((p) => p.categoryIds?.includes(service.categoryId) && p.availableNow)
-        .slice(0, 4);
-      matches.forEach((p, i) => {
-        setTimeout(() => {
-          setBookings((prev) =>
-            prev.map((b) => {
-              if (b.id !== bookingId) return b;
-              if (acceptSimRef.current.has(`${b.id}-${p.id}`)) return b;
-              // Never revert a booking that the customer has already confirmed
-              if (!["searching", "awaiting-customer-confirm"].includes(b.status)) return b;
-              acceptSimRef.current.add(`${b.id}-${p.id}`);
-              return { ...b, acceptedBy: [...(b.acceptedBy ?? []), p], status: "awaiting-customer-confirm" };
-            }),
-          );
-          if (user) {
-            supabase
-              .from("bookings")
-              .update({ status: "awaiting-customer-confirm" })
-              .eq("id", bookingId)
-              .in("status", ["searching", "awaiting-customer-confirm"])
-              .then(() => {});
-          }
-          push({
-            kind: "match",
-            title: `${p.name} is available`,
-            body: `Tap to view & confirm for ${service.name}`,
-          });
-        }, 1200 + i * 1500);
-      });
-    }
     return booking;
   };
 
   const partnerAcceptBooking: AppContextValue["partnerAcceptBooking"] = async (bookingId, professional) => {
     if (!user) return { ok: false, reason: "Sign in required" };
-    const target = bookings.find((x) => x.id === bookingId);
+    const target =
+      availableBookings.find((x) => x.id === bookingId) ?? bookings.find((x) => x.id === bookingId);
     if (!target) return { ok: false, reason: "Booking not found" };
 
-    // Conflict detection: only block on scheduled bookings.
-    if (target.type === "scheduled" && target.scheduledAt) {
-      const targetDay = target.scheduledAt.toISOString().slice(0, 10);
-      const targetStart = target.scheduledAt.getTime();
-      const ONE_HOUR = 60 * 60 * 1000;
-      const targetEnd = targetStart + ONE_HOUR; // assumed slot
-      const { data: existing } = await supabase
-        .from("bookings")
-        .select("id, scheduled_at, status, booking_type")
-        .eq("partner_id", user.id)
-        .in("status", ["confirmed", "in-progress", "awaiting-customer-confirm"]);
-      const conflict = (existing ?? []).find((row) => {
-        if (row.booking_type !== "scheduled" || !row.scheduled_at) return false;
-        const rowDate = new Date(row.scheduled_at);
-        const sameDay = rowDate.toISOString().slice(0, 10) === targetDay;
-        if (!sameDay) return false;
-        const rowStart = rowDate.getTime();
-        const rowEnd = rowStart + ONE_HOUR;
-        return rowStart < targetEnd && rowEnd > targetStart || sameDay;
-      });
-      if (conflict) {
-        return { ok: false, reason: "You already have a reservation that day. Please decline or cancel it first." };
-      }
-    }
-
-    // Persist acceptance: assign partner_id and move status forward.
-    // Customer sees the partner in their "accepted by" list automatically via realtime.
-    const newStatus: Booking["status"] = target.type === "instant" ? "awaiting-customer-confirm" : "confirmed";
+    const now = new Date();
+    // Persist acceptance: go straight to confirmed (no customer confirmation needed).
+    // Use optimistic lock (.eq status = searching) so two partners can't double-accept.
     const { error } = await supabase
       .from("bookings")
       .update({
         partner_id: user.id,
+        partner_user_id: user.id,
         professional_id: professional.id,
         professional_name: professional.name,
-        status: newStatus,
-        ...(newStatus === "confirmed" ? { confirmed_at: new Date().toISOString() } : {}),
+        status: "confirmed",
+        confirmed_at: now.toISOString(),
       })
-      .eq("id", bookingId);
+      .eq("id", bookingId)
+      .eq("status", "searching");
+
     if (error) {
       console.error("partnerAcceptBooking failed", error);
       return { ok: false, reason: error.message };
     }
 
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === bookingId
-          ? { ...b, acceptedBy: [...(b.acceptedBy ?? []), professional], status: newStatus, professional }
-          : b,
-      ),
-    );
-    push({
-      kind: "success",
-      title: "Job accepted",
-      body: target.type === "instant" ? "Waiting for customer confirmation" : "Reservation confirmed",
+    // Optimistic local update: move from available → own bookings
+    setAvailableBookings((prev) => prev.filter((x) => x.id !== bookingId));
+    const confirmed: Booking = {
+      ...target,
+      status: "confirmed",
+      professional,
+      confirmedAt: now,
+      partnerUserId: user.id,
+    };
+    setBookings((prev) => {
+      if (prev.find((x) => x.id === bookingId)) {
+        return prev.map((b) => (b.id === bookingId ? confirmed : b));
+      }
+      return [confirmed, ...prev];
     });
+
+    push({ kind: "success", title: "Job accepted — heading to customer" });
+
+    // Simulate partner arrival after 8 s (demo; real partners would update location)
+    setTimeout(() => {
+      const arrivedAt = new Date();
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, arrivedAt } : b)),
+      );
+      supabase
+        .from("bookings")
+        .update({ arrived_at: arrivedAt.toISOString() })
+        .eq("id", bookingId)
+        .then(() => {});
+      push({ kind: "success", title: "You've arrived at the customer" });
+    }, 8000);
+
     return { ok: true };
   };
 
   const customerConfirmPartner: AppContextValue["customerConfirmPartner"] = (bookingId, professional) => {
+    // Partners now auto-confirm on acceptance — this is kept for compatibility only.
     const now = new Date();
     setBookings((prev) =>
       prev.map((b) =>
-        b.id === bookingId
-          ? { ...b, professional, status: "confirmed", confirmedAt: now }
-          : b,
+        b.id === bookingId ? { ...b, professional, status: "confirmed", confirmedAt: now } : b,
       ),
     );
-    if (user) {
-      supabase
-        .from("bookings")
-        .update({
-          professional_id: professional.id,
-          professional_name: professional.name,
-          status: "confirmed",
-          confirmed_at: now.toISOString(),
-        })
-        .eq("id", bookingId)
-        .then(() => {});
-    }
-    push({
-      kind: "confirm",
-      title: "Booking confirmed",
-      body: `${professional.name} will arrive in ${professional.eta}`,
-    });
-
-    // Simulate partner arrival after a short delay (demo)
-    const etaMinutes = parseInt(professional.eta) || 8;
-    const arriveMs = Math.min(etaMinutes, 1) * 1000 * 8; // 8s per minute, capped
-    setTimeout(() => {
-      const arrivedAt = new Date();
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId
-            ? { ...b, arrivedAt }
-            : b,
-        ),
-      );
-      // Note: status stays "confirmed" until partner enters OTP and starts service
-      if (user) {
-        supabase
-          .from("bookings")
-          .update({ arrived_at: arrivedAt.toISOString() })
-          .eq("id", bookingId)
-          .then(() => {});
-      }
-      push({
-        kind: "success",
-        title: `${professional.name} has arrived`,
-        body: "Share the start OTP to begin service",
-      });
-    }, Math.max(arriveMs, 8000));
   };
 
   const cancelBooking: AppContextValue["cancelBooking"] = (bookingId, reason, fee = 0) => {
@@ -591,6 +569,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         view,
         navigate,
         bookings,
+        availableBookings,
         loadingBookings,
         createBooking,
         partnerAcceptBooking,

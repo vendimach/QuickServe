@@ -5,43 +5,52 @@ const corsHeaders = {
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // Verifies a Razorpay payment signature and updates the booking row.
+// In demo mode (no keys or demo order ID) signature check is skipped.
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET");
-    if (!KEY_SECRET) throw new Error("Razorpay secret not configured");
-
     const body = await req.json();
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, bookingId } = body ?? {};
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !bookingId) {
+    if (!razorpay_order_id || !razorpay_payment_id || !bookingId) {
       return new Response(JSON.stringify({ error: "Missing fields" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // HMAC-SHA256(order_id|payment_id, key_secret)
-    const data = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(KEY_SECRET),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
-    const expected = Array.from(new Uint8Array(sig))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    const KEY_SECRET = Deno.env.get("RAZORPAY_KEY_SECRET");
+    const isDemo = !KEY_SECRET || String(razorpay_order_id).startsWith("demo_order_");
 
-    if (expected !== razorpay_signature) {
-      console.warn("Razorpay signature mismatch", { bookingId });
-      return new Response(JSON.stringify({ verified: false }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!isDemo) {
+      if (!razorpay_signature) {
+        return new Response(JSON.stringify({ error: "Missing signature" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // HMAC-SHA256(order_id|payment_id, key_secret)
+      const data = `${razorpay_order_id}|${razorpay_payment_id}`;
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        "raw",
+        enc.encode(KEY_SECRET),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+      );
+      const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
+      const expected = Array.from(new Uint8Array(sig))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      if (expected !== razorpay_signature) {
+        console.warn("Razorpay signature mismatch", { bookingId });
+        return new Response(JSON.stringify({ verified: false }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const supabase = createClient(

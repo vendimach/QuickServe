@@ -102,6 +102,11 @@ export interface Booking {
   ratingComment?: string;
   preferences?: ServicePreferences;
   rated?: boolean;
+  userLat?: number;
+  userLng?: number;
+  partnerLat?: number;
+  partnerLng?: number;
+  partnerUserId?: string;
 }
 
 export interface PartnerRequest {

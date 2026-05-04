@@ -60,6 +60,11 @@ export const BookingSummary = ({ bookingId }: Props) => {
       description: booking.service.name,
     });
     setPaying(false);
+    if (res.paid) {
+      push({ kind: "success", title: "Payment successful", body: `₹${booking.service.price} paid` });
+    } else if (res.reason && res.reason !== "Payment cancelled") {
+      push({ kind: "warning", title: "Payment failed", body: res.reason });
+    }
   };
 
   const submitRating = async () => {
