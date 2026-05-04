@@ -23,7 +23,7 @@ const durationMs = (a?: Date, b?: Date) => {
 };
 
 export const BookingSummary = ({ bookingId }: Props) => {
-  const { bookings, navigate, saveRating } = useApp();
+  const { bookings, loadingBookings, navigate, saveRating } = useApp();
   const { addReview } = useMarketplaceData();
   const { profile, user } = useAuth();
   const { push } = useNotifications();
@@ -36,7 +36,25 @@ export const BookingSummary = ({ bookingId }: Props) => {
   const [submitting, setSubmitting] = useState(false);
   const [ratingError, setRatingError] = useState(false);
 
-  if (!booking || !booking.professional) return null;
+  if (!booking) {
+    if (loadingBookings) {
+      return (
+        <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      );
+    }
+    return null;
+  }
+
+  const professional = booking.professional ?? {
+    id: "unknown",
+    name: "Your Professional",
+    rating: 5,
+    jobs: 0,
+    avatar: "P",
+    eta: "—",
+  };
 
   const totalDuration = durationMs(booking.startedAt, booking.completedAt);
   const paid = booking.paymentStatus === "paid";
@@ -79,7 +97,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
     setRatingError(false);
     setSubmitting(true);
     addReview({
-      professionalId: booking.professional!.id,
+      professionalId: professional.id,
       bookingId: booking.id,
       rating,
       comment: comment.trim() || undefined,
@@ -131,7 +149,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
             {booking.startedAt && <Row label="Service started" value={fmtTime(booking.startedAt)} />}
             {booking.completedAt && <Row label="Service ended" value={fmtTime(booking.completedAt)} />}
             {totalDuration && <Row label="Total duration" value={totalDuration} highlight />}
-            <Row label="Partner" value={booking.professional.name} />
+            <Row label="Partner" value={professional.name} />
           </div>
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs">
             <MapPin className="h-3.5 w-3.5 text-primary" />
@@ -206,10 +224,10 @@ export const BookingSummary = ({ bookingId }: Props) => {
       <div className="rounded-3xl bg-card p-5 shadow-card animate-fade-in-up">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full gradient-primary text-sm font-bold text-primary-foreground">
-            {booking.professional.avatar}
+            {professional.avatar}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold">{booking.professional.name}</p>
+            <p className="text-sm font-bold">{professional.name}</p>
             <p className="text-xs text-muted-foreground">How was your service?</p>
           </div>
         </div>
