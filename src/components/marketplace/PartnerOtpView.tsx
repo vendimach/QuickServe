@@ -1,7 +1,6 @@
 import { ArrowLeft, ShieldCheck, KeyRound, Copy } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 
 interface Props { bookingId: string; }
 
@@ -14,9 +13,8 @@ export const PartnerOtpView = ({ bookingId }: Props) => {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(otp);
-      toast.success("OTP copied");
     } catch {
-      toast.error("Couldn't copy");
+      // clipboard unavailable — OTP is visible on screen
     }
   };
 

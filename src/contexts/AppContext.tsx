@@ -362,6 +362,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             prev.map((b) => {
               if (b.id !== bookingId) return b;
               if (acceptSimRef.current.has(`${b.id}-${p.id}`)) return b;
+              // Never revert a booking that the customer has already confirmed
+              if (!["searching", "awaiting-customer-confirm"].includes(b.status)) return b;
               acceptSimRef.current.add(`${b.id}-${p.id}`);
               return { ...b, acceptedBy: [...(b.acceptedBy ?? []), p], status: "awaiting-customer-confirm" };
             }),
@@ -371,6 +373,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               .from("bookings")
               .update({ status: "awaiting-customer-confirm" })
               .eq("id", bookingId)
+              .in("status", ["searching", "awaiting-customer-confirm"])
               .then(() => {});
           }
           push({
@@ -474,9 +477,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       body: `${professional.name} will arrive in ${professional.eta}`,
     });
 
-    // Simulate partner arrival after their ETA (compressed for demo)
+    // Simulate partner arrival after a short delay (demo)
     const etaMinutes = parseInt(professional.eta) || 8;
-    const arriveMs = Math.min(etaMinutes, 1) * 1000 * 30; // 30s per minute, capped
+    const arriveMs = Math.min(etaMinutes, 1) * 1000 * 8; // 8s per minute, capped
     setTimeout(() => {
       const arrivedAt = new Date();
       setBookings((prev) =>

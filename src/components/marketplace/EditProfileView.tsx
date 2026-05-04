@@ -6,8 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-
 export const EditProfileView = () => {
   const { navigate } = useApp();
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -15,21 +13,22 @@ export const EditProfileView = () => {
   const [mobile, setMobile] = useState(profile?.mobile ?? "");
   const [bio, setBio] = useState((profile as any)?.bio ?? "");
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (!fullName.trim()) return toast.error("Name required");
-    if (mobile.replace(/\D/g, "").length < 10) return toast.error("Valid mobile required");
+    if (!fullName.trim()) { setFormError("Name is required"); return; }
+    if (mobile.replace(/\D/g, "").length < 10) { setFormError("Enter a valid 10-digit mobile number"); return; }
+    setFormError("");
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
       .update({ full_name: fullName, mobile, bio })
       .eq("id", user.id);
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) { setFormError(error.message); return; }
     await refreshProfile();
-    toast.success("Profile updated");
     navigate({ name: "profile" });
   };
 
@@ -38,7 +37,6 @@ export const EditProfileView = () => {
     if (!window.confirm("Delete your account? This signs you out and removes your profile data.")) return;
     await supabase.from("profiles").delete().eq("id", user.id);
     await signOut();
-    toast.success("Account data deleted");
   };
 
   return (
@@ -78,6 +76,9 @@ export const EditProfileView = () => {
             className="w-full rounded-xl border border-input bg-background p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
+        {formError && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{formError}</p>
+        )}
         <Button type="submit" className="w-full" disabled={saving}>
           <Save className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save changes"}
         </Button>

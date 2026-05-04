@@ -6,8 +6,6 @@ import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { payWithRazorpay } from "@/lib/razorpay";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-
 interface Props { bookingId: string }
 
 const fmtTime = (d?: Date) =>
@@ -36,6 +34,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
   const [comment, setComment] = useState("");
   const [paying, setPaying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [ratingError, setRatingError] = useState(false);
 
   if (!booking || !booking.professional) return null;
 
@@ -61,8 +60,6 @@ export const BookingSummary = ({ bookingId }: Props) => {
       description: booking.service.name,
     });
     setPaying(false);
-    if (res.paid) toast.success("Payment successful");
-    else toast.error(res.reason ?? "Payment failed");
   };
 
   const submitRating = async () => {
@@ -71,9 +68,10 @@ export const BookingSummary = ({ bookingId }: Props) => {
       return;
     }
     if (rating < 1) {
-      toast.error("Pick a star rating first");
+      setRatingError(true);
       return;
     }
+    setRatingError(false);
     setSubmitting(true);
     addReview({
       professionalId: booking.professional!.id,
@@ -251,6 +249,9 @@ export const BookingSummary = ({ bookingId }: Props) => {
               className="mt-4 w-full rounded-xl border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             />
 
+            {ratingError && (
+              <p className="mt-2 text-center text-xs font-medium text-destructive">Please select a star rating first</p>
+            )}
             <button
               onClick={submitRating}
               disabled={submitting}

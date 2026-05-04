@@ -3,7 +3,11 @@
     "allow": [
       "Bash(Get-ChildItem -Force)",
       "Bash(Select-Object Name, Attributes)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\koron\\\\OneDrive\\\\Desktop\\\\QuickServe\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\koron\\\\OneDrive\\\\Desktop\\\\QuickServe\" -Recurse -Directory | ForEach-Object { $_.FullName } | Select-Object -First 50)",
+      "Bash(npm run *)"
     ]
   }
 }

@@ -5,7 +5,6 @@ import { useUserData, type PaymentMethod } from "@/contexts/UserDataContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const kindIcon = (k: PaymentMethod["kind"]) =>
@@ -24,10 +23,10 @@ export const PaymentMethodsView = () => {
     e.preventDefault();
     try {
       if (kind === "upi") {
-        if (!/^[\w.\-]+@[\w]+$/.test(upi)) return toast.error("Enter valid UPI ID");
+        if (!/^[\w.\-]+@[\w]+$/.test(upi)) return;
         await addPaymentMethod({ kind, label: upi, upi_id: upi });
       } else if (kind === "card") {
-        if (last4.length !== 4) return toast.error("Enter last 4 digits");
+        if (last4.length !== 4) return;
         await addPaymentMethod({ kind, label: `${brand} ••${last4}`, last4, brand });
       } else if (kind === "wallet") {
         await addPaymentMethod({ kind, label: "Wallet" });
@@ -35,9 +34,8 @@ export const PaymentMethodsView = () => {
         await addPaymentMethod({ kind, label: "Cash on delivery" });
       }
       setAdding(false); setUpi(""); setLast4("");
-      toast.success("Payment method added");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch {
+      // addPaymentMethod error — silently ignored, UI stays in adding mode
     }
   };
 

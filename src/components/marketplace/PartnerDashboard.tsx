@@ -10,7 +10,6 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { usePartnerData } from "@/contexts/PartnerDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -89,7 +88,6 @@ export const PartnerDashboard = () => {
           .single();
         if (error) {
           console.error("Failed to persist accepted request", error);
-          toast.error("Couldn't save job to your history");
         } else {
           dbBookingId = data.id;
         }
@@ -150,7 +148,7 @@ export const PartnerDashboard = () => {
       await saveSchedule(schedule.map((s, i) => ({ days: s.days, start: s.start, end: s.end, position: i })));
       push({ kind: "success", title: "Schedule saved", body: `${schedule.length} slot(s) synced` });
     } catch (e) {
-      toast.error("Couldn't save schedule");
+      console.error("Couldn't save schedule", e);
     } finally {
       setSavingSchedule(false);
     }

@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { ShieldCheck, Phone, ArrowRight, CheckCircle2, Sparkles, KeyRound, Lock } from "lucide-react";
-import { toast } from "sonner";
 import { useEffect } from "react";
 
 type Step = "form" | "mobile-otp" | "aadhaar-otp" | "done";
@@ -67,48 +66,50 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) toast.error(error.message);
-    else toast.success("Welcome back!");
+    if (err) setError(err.message);
   };
 
   const sendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return toast.error("Enter your registered email");
+    setError("");
+    if (!email) { setError("Enter your registered email"); return; }
     setLoading(true);
-    // shouldCreateUser:false → only registered users can request the OTP
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error: err } = await supabase.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: false },
     });
     setLoading(false);
-    if (error) {
-      toast.error(error.message.includes("not found") || error.message.includes("Signups")
+    if (err) {
+      setError(err.message.includes("not found") || err.message.includes("Signups")
         ? "No account found for this email. Please sign up first."
-        : error.message);
+        : err.message);
       return;
     }
     setOtpSent(true);
-    toast.success("OTP sent — check your email");
+    setInfo("OTP sent — check your email");
   };
 
   const verifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.replace(/\D/g, "").length < 6) return toast.error("Enter the 6-digit OTP");
+    setError("");
+    if (otp.replace(/\D/g, "").length < 6) { setError("Enter the 6-digit OTP"); return; }
     setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
+    const { error: err } = await supabase.auth.verifyOtp({
       email,
       token: otp.trim(),
       type: "email",
     });
     setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Signed in");
+    if (err) setError(err.message);
   };
 
   const switchMode = (m: "password" | "otp") => {
@@ -129,11 +130,12 @@ function SignInForm() {
           <form onSubmit={sendOtp} className="space-y-3">
             <div>
               <Label htmlFor="otp-email">Registered email</Label>
-              <Input id="otp-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input id="otp-email" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 We'll email a 6-digit code. Only registered accounts can sign in this way.
               </p>
             </div>
+            {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Sending…" : "Send OTP"} <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
@@ -149,16 +151,18 @@ function SignInForm() {
                 <p className="truncate text-xs text-muted-foreground">Sent to {email}</p>
               </div>
             </div>
+            {info && <p className="rounded-lg bg-success/10 px-3 py-2 text-xs font-medium text-success">{info}</p>}
             <div>
               <Label htmlFor="otp-code">6-digit code</Label>
-              <Input id="otp-code" inputMode="numeric" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" />
+              <Input id="otp-code" inputMode="numeric" maxLength={6} value={otp} onChange={(e) => { setOtp(e.target.value); setError(""); }} placeholder="123456" />
             </div>
+            {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Verifying…" : "Verify & Sign In"}
             </Button>
             <button
               type="button"
-              onClick={() => { setOtpSent(false); setOtp(""); }}
+              onClick={() => { setOtpSent(false); setOtp(""); setError(""); setInfo(""); }}
               className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
             >
               Use a different email
@@ -177,12 +181,13 @@ function SignInForm() {
       </div>
       <div>
         <Label htmlFor="si-email">Email</Label>
-        <Input id="si-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input id="si-email" type="email" required value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} />
       </div>
       <div>
         <Label htmlFor="si-pwd">Password</Label>
-        <Input id="si-pwd" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Input id="si-pwd" type="password" required value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} />
       </div>
+      {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Signing in…" : "Sign In"} <ArrowRight className="h-4 w-4 ml-1" />
       </Button>
@@ -217,39 +222,41 @@ function SignUpFlow({ onDone }: { onDone: () => void }) {
   const [terms, setTerms] = useState(false);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const onFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!terms) return toast.error("Please accept the Terms & Services");
-    if (mobile.replace(/\D/g, "").length < 10) return toast.error("Enter a valid 10-digit mobile");
-    if (aadhaar.replace(/\D/g, "").length !== 12) return toast.error("Aadhaar must be 12 digits");
-    if (password.length < 6) return toast.error("Password must be 6+ chars");
-    toast.info(`OTP sent to ${mobile} (demo: use 123456)`);
+    setError("");
+    if (!terms) { setError("Please accept the Terms & Services"); return; }
+    if (mobile.replace(/\D/g, "").length < 10) { setError("Enter a valid 10-digit mobile number"); return; }
+    if (aadhaar.replace(/\D/g, "").length !== 12) { setError("Aadhaar must be 12 digits"); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
     setStep("mobile-otp");
   };
 
   const verifyMobileOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp !== "123456") return toast.error("Invalid OTP. Try 123456");
-    toast.success("Mobile verified");
-    toast.info("Aadhaar OTP sent (demo: use 654321)");
+    setError("");
+    if (otp !== "123456") { setError("Invalid OTP. Demo code: 123456"); return; }
     setOtp("");
     setStep("aadhaar-otp");
   };
 
   const verifyAadhaarOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp !== "654321") return toast.error("Invalid OTP. Try 654321");
+    setError("");
+    if (otp !== "654321") { setError("Invalid OTP. Demo code: 654321"); return; }
     setLoading(true);
     const redirectUrl = `${window.location.origin}/`;
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: redirectUrl, data: { full_name: fullName } },
     });
-    if (error || !data.user) {
+    if (signUpError || !data.user) {
       setLoading(false);
-      return toast.error(error?.message ?? "Signup failed");
+      setError(signUpError?.message ?? "Signup failed");
+      return;
     }
 
     const uid = data.user.id;
@@ -267,8 +274,7 @@ function SignUpFlow({ onDone }: { onDone: () => void }) {
       supabase.from("user_roles").insert({ user_id: uid, role }),
     ]);
     setLoading(false);
-    if (pErr || rErr) return toast.error(pErr?.message ?? rErr?.message ?? "Profile setup failed");
-    toast.success("Account created! Signing you in…");
+    if (pErr || rErr) { setError(pErr?.message ?? rErr?.message ?? "Profile setup failed"); return; }
     setStep("done");
     setTimeout(onDone, 1200);
   };
@@ -295,11 +301,12 @@ function SignUpFlow({ onDone }: { onDone: () => void }) {
         </div>
         <div>
           <Label htmlFor="otp">6-digit OTP</Label>
-          <Input id="otp" inputMode="numeric" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)} placeholder={isMobile ? "123456" : "654321"} />
+          <Input id="otp" inputMode="numeric" maxLength={6} value={otp} onChange={(e) => { setOtp(e.target.value); setError(""); }} placeholder={isMobile ? "123456" : "654321"} />
           <p className="mt-1 text-[11px] text-muted-foreground">
             Demo OTP: <span className="font-mono font-bold">{isMobile ? "123456" : "654321"}</span>
           </p>
         </div>
+        {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Creating account…" : "Verify & Continue"}
         </Button>
@@ -354,11 +361,12 @@ function SignUpFlow({ onDone }: { onDone: () => void }) {
         <Input id="su-aadhaar" inputMode="numeric" maxLength={12} required value={aadhaar} onChange={(e) => setAadhaar(e.target.value)} placeholder="XXXX XXXX XXXX" />
       </div>
       <label className="flex items-start gap-2 text-xs text-muted-foreground">
-        <Checkbox checked={terms} onCheckedChange={(v) => setTerms(!!v)} className="mt-0.5" />
+        <Checkbox checked={terms} onCheckedChange={(v) => { setTerms(!!v); setError(""); }} className="mt-0.5" />
         <span>
           I agree to QuickServe's <span className="text-primary font-semibold">Terms & Services</span> and consent to mobile + Aadhaar verification.
         </span>
       </label>
+      {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
       <Button type="submit" className="w-full">
         Continue <ArrowRight className="h-4 w-4 ml-1" />
       </Button>

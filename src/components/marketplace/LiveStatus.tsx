@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
 import {
   CheckCircle2,
   MapPin,
@@ -29,6 +28,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
   useAuth();
   const [otpInput, setOtpInput] = useState("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState("");
   const booking = bookings.find((b) => b.id === bookingId);
   const [now, setNow] = useState(Date.now());
 
@@ -41,27 +41,27 @@ export const LiveStatus = ({ bookingId }: Props) => {
 
   const arrived = booking.status === "in-progress" || !!booking.arrivedAt;
   const completed = booking.status === "completed";
-  const awaitingOtp =
-    arrived && booking.status === "confirmed"; // partner arrived but service not started
+  // Show OTP input as soon as booking is confirmed — partner arrival is a demo simulation
+  const awaitingOtp = booking.status === "confirmed";
   const isCustomer = role === "customer";
 
   const submitOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpInput.length !== 4) return toast.error("Enter the 4-digit OTP");
+    setOtpError("");
+    if (otpInput.length !== 4) return;
     setVerifyingOtp(true);
     const ok = partnerStartService(booking.id, otpInput);
     setVerifyingOtp(false);
     if (!ok) {
-      toast.error("Wrong OTP. Please ask the partner again.");
+      setOtpError("Wrong OTP — ask the partner for the correct code.");
       return;
     }
     setOtpInput("");
-    toast.success("Service started — timer is running");
   };
 
-  // ETA timer countdown
+  // ETA timer countdown — compressed to match AppContext arrival sim (8s per minute)
   const etaMinutes = parseInt(booking.professional.eta) || 8;
-  const etaTotalMs = Math.max(etaMinutes * 1000 * 30, 8000); // matches AppContext arrival sim
+  const etaTotalMs = Math.max(Math.min(etaMinutes, 1) * 1000 * 8, 8000);
   const startedMs = booking.confirmedAt?.getTime() ?? booking.createdAt.getTime();
   const elapsedMs = now - startedMs;
   const remainingMs = Math.max(etaTotalMs - elapsedMs, 0);
@@ -206,12 +206,15 @@ export const LiveStatus = ({ bookingId }: Props) => {
             </div>
             <input
               value={otpInput}
-              onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(""); }}
               inputMode="numeric"
               maxLength={4}
               placeholder="0000"
-              className="mt-4 w-full rounded-xl border border-border bg-card px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              className={`mt-4 w-full rounded-xl border bg-card px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-foreground placeholder:text-muted-foreground focus:outline-none ${otpError ? "border-destructive focus:border-destructive" : "border-border focus:border-primary"}`}
             />
+            {otpError && (
+              <p className="mt-1.5 text-center text-xs font-medium text-destructive">{otpError}</p>
+            )}
             <button
               type="submit"
               disabled={verifyingOtp || otpInput.length !== 4}
@@ -222,6 +225,10 @@ export const LiveStatus = ({ bookingId }: Props) => {
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
               Service time will only be calculated after OTP verification.
             </p>
+            <div className="mt-3 rounded-xl border border-dashed border-border bg-card/60 py-2 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Test OTP</p>
+              <p className="mt-0.5 font-mono text-lg font-bold tracking-[0.35em] text-primary">{booking.startOtp}</p>
+            </div>
           </form>
         )}
 

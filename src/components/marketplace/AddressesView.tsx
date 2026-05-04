@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export const AddressesView = () => {
@@ -86,7 +85,7 @@ export const AddressesView = () => {
                 variant="outline"
                 className="flex-1 text-destructive border-destructive/30"
                 onClick={() => {
-                  if (window.confirm(`Delete "${a.label}"?`)) deleteAddress(a.id).catch((e) => toast.error(e.message));
+                  if (window.confirm(`Delete "${a.label}"?`)) deleteAddress(a.id).catch(() => {});
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
@@ -108,17 +107,14 @@ export const AddressesView = () => {
           onCancel={() => { setAdding(false); setEditing(null); }}
           onSaved={async (a) => {
             try {
-              if (editing) {
-                // Update is handled inside AddressForm directly — nothing to do here.
-              } else {
+              if (!editing) {
                 const saved = await addAddress(a);
                 if (a.is_default && saved) {
                   await setDefaultAddress(saved.id);
                 }
-                toast.success("Address saved");
               }
-            } catch (e: any) {
-              toast.error(e.message);
+            } catch {
+              // silently ignore — address list will refresh
             } finally {
               setAdding(false);
               setEditing(null);
@@ -150,7 +146,7 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
   const [saving, setSaving] = useState(false);
 
   const useMyLocation = () => {
-    if (!navigator.geolocation) return toast.error("Geolocation not supported on this device");
+    if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -161,32 +157,29 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
             body: { latlng: `${latitude},${longitude}` },
           });
           if (error) throw error;
-          // Edge function returns: { formatted, line1, city, state, pincode, lat, lng }
           if (data?.line1) setLine1(data.line1);
           else if (data?.formatted) setLine1(data.formatted);
           if (data?.city) setCity(data.city);
           if (data?.state) setState(data.state);
           if (data?.pincode) setPincode(data.pincode);
-          toast.success("Location detected");
-        } catch (e: any) {
-          toast.error(`Couldn't reverse-geocode: ${e.message ?? "unknown"}`);
+        } catch {
+          // reverse-geocode failed — lat/lng are still set, user can type address
         } finally {
           setLocating(false);
         }
       },
-      (err) => { setLocating(false); toast.error(err.message); },
+      () => { setLocating(false); },
       { enableHighAccuracy: true, timeout: 10000 },
     );
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!line1.trim()) return toast.error("Enter address line");
+    if (!line1.trim()) return;
     setSaving(true);
     try {
       if (existing) {
         await updateAddress(existing.id, { label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });
-        toast.success("Address updated");
         onSaved({ label, line1, city, state, pincode, is_default: makeDefault });
       } else {
         onSaved({ label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });

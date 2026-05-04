@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 
@@ -84,16 +83,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             },
             ...prev,
           ]);
-          // toast for live notifications coming from elsewhere (e.g. partner -> customer)
-          const t =
-            row.kind === "success" || row.kind === "confirm"
-              ? toast.success
-              : row.kind === "warning"
-                ? toast.warning
-                : row.kind === "match"
-                  ? toast.info
-                  : toast;
-          t(row.title, { description: row.body ?? undefined });
         },
       )
       .subscribe();
@@ -130,15 +119,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   const push: NotificationContextValue["push"] = useCallback((n) => {
-    const t =
-      n.kind === "success" || n.kind === "confirm"
-        ? toast.success
-        : n.kind === "warning"
-          ? toast.warning
-          : n.kind === "match"
-            ? toast.info
-            : toast;
-    t(n.title, { description: n.body });
     if (!user) return;
     // Persist; the realtime INSERT handler will add it to local state.
     supabase

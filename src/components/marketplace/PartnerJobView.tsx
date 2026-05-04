@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ArrowLeft, KeyRound, MapPin, Phone, MessageCircle, Calendar, Zap, Clock, User as UserIcon, Copy, Navigation, AlertTriangle, XCircle } from "lucide-react";
-import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,10 +72,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
   const partnerFine = inProgress ? 200 : 100;
 
   const handlePartnerCancel = async () => {
-    if (!realBooking) {
-      toast.error("This sample job can't be cancelled.");
-      return;
-    }
+    if (!realBooking) return;
     const reason = window.prompt(
       `Cancel this job?\n\nA fine of ₹${partnerFine} will be deducted from your earnings.\n\nOptional reason:`,
       "",
@@ -97,7 +93,6 @@ export const PartnerJobView = ({ bookingId }: Props) => {
         });
         if (error) console.error("Failed to record partner fine", error);
       }
-      toast.success(`Job cancelled. ₹${partnerFine} fine applied to your account.`);
       navigate({ name: "partner-dashboard" });
     } finally {
       setCancelling(false);
@@ -107,9 +102,8 @@ export const PartnerJobView = ({ bookingId }: Props) => {
   const copyOtp = async () => {
     try {
       await navigator.clipboard.writeText(otp);
-      toast.success("OTP copied");
     } catch {
-      toast.error("Couldn't copy");
+      // clipboard unavailable — OTP is visible on screen
     }
   };
 
