@@ -46,7 +46,7 @@ export const BookingFlow = ({ serviceId }: Props) => {
   if (!service) return null;
 
   const handleConfirm = () => {
-    if (!mode) return;
+    if (!mode || !selectedAddress) return;
     let scheduledAt: Date | undefined;
     if (mode === "scheduled") {
       const [h, mPart] = time.split(":");
@@ -55,11 +55,9 @@ export const BookingFlow = ({ serviceId }: Props) => {
       scheduledAt = new Date(date);
       scheduledAt.setHours(hour, parseInt(mPart), 0, 0);
     }
-    const addressString = selectedAddress
-      ? `${selectedAddress.label} — ${[selectedAddress.line1, selectedAddress.city, selectedAddress.pincode]
-          .filter(Boolean)
-          .join(", ")}`
-      : undefined;
+    const addressString = `${selectedAddress.label} — ${[selectedAddress.line1, selectedAddress.city, selectedAddress.pincode]
+      .filter(Boolean)
+      .join(", ")}`;
     const booking = createBooking(
       service,
       mode,
@@ -68,7 +66,8 @@ export const BookingFlow = ({ serviceId }: Props) => {
       preferences[service.id],
       addressString,
     );
-    navigate({ name: "matching", bookingId: booking.id });
+    // Navigate directly to live-status which handles the "searching" state
+    navigate({ name: "live-status", bookingId: booking.id });
   };
 
   const hasPrefs = !!preferences[service.id];
@@ -176,15 +175,18 @@ export const BookingFlow = ({ serviceId }: Props) => {
         </div>
       )}
 
-      {/* Address selector */}
-      <div className="mt-5 rounded-2xl bg-card shadow-soft">
+      {/* Address selector — REQUIRED before booking */}
+      <div className={cn(
+        "mt-5 rounded-2xl bg-card shadow-soft",
+        !selectedAddress && "ring-2 ring-destructive/30",
+      )}>
         <button
           type="button"
           onClick={() => setAddressPickerOpen((v) => !v)}
           className="flex w-full items-center justify-between p-4 text-left"
         >
           <div className="flex min-w-0 items-center gap-2">
-            <MapPin className="h-4 w-4 shrink-0 text-primary" />
+            <MapPin className={cn("h-4 w-4 shrink-0", selectedAddress ? "text-primary" : "text-destructive")} />
             <div className="min-w-0">
               <p className="text-xs font-semibold text-foreground">
                 {selectedAddress ? selectedAddress.label : "Select service address"}
@@ -303,17 +305,31 @@ export const BookingFlow = ({ serviceId }: Props) => {
         </div>
       </div>
 
+      {/* Address required hint */}
+      {mode && !selectedAddress && (
+        <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive animate-fade-in-up">
+          <MapPin className="h-3.5 w-3.5 shrink-0" />
+          A service address is required before you can request
+        </p>
+      )}
+
       <button
-        disabled={!mode}
+        disabled={!mode || !selectedAddress}
         onClick={handleConfirm}
         className={cn(
-          "mt-6 w-full rounded-2xl py-4 text-sm font-bold transition-bounce active:scale-[0.98]",
-          mode
+          "mt-4 w-full rounded-2xl py-4 text-sm font-bold transition-bounce active:scale-[0.98]",
+          mode && selectedAddress
             ? "gradient-primary text-primary-foreground shadow-elevated hover:-translate-y-0.5"
-            : "bg-muted text-muted-foreground",
+            : "bg-muted text-muted-foreground cursor-not-allowed",
         )}
       >
-        {mode === "instant" ? "Find Professional Now" : mode === "scheduled" ? "Confirm Booking" : "Choose an option"}
+        {!mode
+          ? "Choose an option above"
+          : !selectedAddress
+            ? "Select a service address first"
+            : mode === "instant"
+              ? "Request Service Now"
+              : "Schedule Service"}
       </button>
     </div>
   );

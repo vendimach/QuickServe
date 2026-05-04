@@ -347,7 +347,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     addressOverride,
     paymentMethodLabel,
   ) => {
-    const otp = generateOtp();
     const bookingId = generateBookingId();
     const booking: Booking = {
       id: bookingId,
@@ -362,7 +361,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       preferences,
       paymentStatus: "pending",
       paymentMethod: paymentMethodLabel,
-      startOtp: otp,
+      // OTP is generated when a partner accepts, not at booking creation.
+      // This ensures only the partner ever sees the OTP.
+      startOtp: undefined,
     };
     setBookings((prev) => [booking, ...prev]);
 
@@ -383,7 +384,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           duration: service.duration,
           preferences: preferences ? JSON.parse(JSON.stringify(preferences)) : null,
           payment_method: paymentMethodLabel ?? null,
-          start_otp: otp,
         }])
         .select()
         .single()
@@ -430,8 +430,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (!target) return { ok: false, reason: "Booking not found" };
 
     const now = new Date();
+    // Generate OTP here, on accept — never at booking creation.
+    // This means the OTP is only ever written by the partner's device and
+    // only ever displayed in the partner's job view (not the customer's screen).
+    const otp = generateOtp();
+
     // Persist acceptance: go straight to confirmed (no customer confirmation needed).
     // Use optimistic lock (.eq status = searching) so two partners can't double-accept.
+    // Race condition prevention: if two partners try simultaneously, only the first
+    // update succeeds because .eq("status","searching") fails for the second partner
+    // once the first has changed the row to "confirmed".
     const { error } = await supabase
       .from("bookings")
       .update({
@@ -441,6 +449,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         professional_name: professional.name,
         status: "confirmed",
         confirmed_at: now.toISOString(),
+        start_otp: otp,
       })
       .eq("id", bookingId)
       .eq("status", "searching");
@@ -450,7 +459,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       return { ok: false, reason: error.message };
     }
 
-    // Optimistic local update: move from available → own bookings
+    // Optimistic local update: move from available → own bookings.
+    // Include the OTP so PartnerJobView can display it immediately without
+    // waiting for the Realtime echo.
     setAvailableBookings((prev) => prev.filter((x) => x.id !== bookingId));
     const confirmed: Booking = {
       ...target,
@@ -458,6 +469,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       professional,
       confirmedAt: now,
       partnerUserId: user.id,
+      startOtp: otp,
     };
     setBookings((prev) => {
       if (prev.find((x) => x.id === bookingId)) {

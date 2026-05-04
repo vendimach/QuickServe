@@ -136,16 +136,16 @@ export const PartnerDashboard = () => {
 
   return (
     <div className="space-y-5 px-5 pb-6">
-      {/* Two availability switches */}
+      {/* Two availability switches — with clear separation of concerns */}
       <div className="rounded-2xl bg-card p-4 shadow-card space-y-3">
         <SwitchRow
           icon={<Zap className="h-4 w-4" />}
           title="Available right now"
-          subtitle="Get instant booking requests live"
+          subtitle="Receive instant real-time job requests"
           on={availableNow}
           onChange={async (v) => {
             await setAvailableNow(v);
-            push({ kind: v ? "success" : "info", title: v ? "You're live for instant bookings" : "Instant matching paused" });
+            push({ kind: v ? "success" : "info", title: v ? "You're live — instant requests enabled" : "Instant requests paused" });
           }}
           color="success"
         />
@@ -153,11 +153,11 @@ export const PartnerDashboard = () => {
         <SwitchRow
           icon={<Eye className="h-4 w-4" />}
           title="Show in today's listings"
-          subtitle="Customers can see & book you for today"
+          subtitle="Profile visible for scheduled bookings only"
           on={listedToday}
           onChange={async (v) => {
             await setListedToday(v);
-            push({ kind: v ? "success" : "info", title: v ? "You're listed for today" : "Removed from today's list" });
+            push({ kind: v ? "success" : "info", title: v ? "Listed in today's scheduled bookings" : "Removed from today's listings" });
           }}
           color="primary"
         />
@@ -170,7 +170,8 @@ export const PartnerDashboard = () => {
           <p className="text-sm font-bold text-foreground">Weekly availability</p>
         </div>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          Customers see you in scheduled-listings during these slots.
+          Sets your profile availability for <span className="font-semibold text-foreground">scheduled bookings only</span>.
+          Not used for instant real-time requests.
         </p>
         <div className="mt-3 space-y-3">
           {schedule.map((slot, i) => (
@@ -296,21 +297,39 @@ export const PartnerDashboard = () => {
         </section>
       )}
 
-      {/* Incoming Requests */}
+      {/* Incoming Requests — gated exclusively by "Available right now" toggle.
+           "Show in today's listings" controls profile visibility for scheduled bookings,
+           NOT whether instant real-time requests are received. */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold text-foreground">Incoming Requests</h2>
-          <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
-            {nearbyRequests.length} new
-          </span>
+          <div>
+            <h2 className="text-base font-bold text-foreground">Instant Requests</h2>
+            <p className="text-[10px] text-muted-foreground">Real-time • within {MAX_RADIUS_KM} km</p>
+          </div>
+          {availableNow && nearbyRequests.length > 0 && (
+            <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
+              {nearbyRequests.length} new
+            </span>
+          )}
         </div>
-        {!availableNow && !listedToday ? (
+        {!availableNow ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
-            <p className="text-xs text-muted-foreground">Turn on availability to receive job requests</p>
+            <Zap className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm font-semibold text-foreground">Instant requests are off</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Toggle "Available right now" above to start receiving real-time job requests
+            </p>
           </div>
         ) : nearbyRequests.length === 0 ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
-            <p className="text-xs text-muted-foreground">No new requests within {MAX_RADIUS_KM} km right now</p>
+            <div className="flex items-center justify-center gap-1.5 text-success mb-2">
+              <Zap className="h-4 w-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Live</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">Waiting for requests</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              No new requests within {MAX_RADIUS_KM} km right now. You'll be notified instantly.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">

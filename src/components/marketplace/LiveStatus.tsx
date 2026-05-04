@@ -25,6 +25,9 @@ interface Props {
   bookingId: string;
 }
 
+// Milliseconds to wait in "searching" before showing "no providers" fallback
+const NO_PROVIDER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 export const LiveStatus = ({ bookingId }: Props) => {
   const { bookings, navigate, completeBooking, cancelBooking, partnerStartService, role } = useApp();
   useAuth();
@@ -43,6 +46,10 @@ export const LiveStatus = ({ bookingId }: Props) => {
 
   // Show "Finding partner…" screen while the booking is still searching
   if (booking.status === "searching") {
+    const searchingElapsedMs = now - booking.createdAt.getTime();
+    const noProviderYet = searchingElapsedMs > NO_PROVIDER_TIMEOUT_MS;
+    const searchMinutes = Math.floor(searchingElapsedMs / 60000);
+
     return (
       <div className="px-5 pb-6">
         <button
@@ -53,17 +60,28 @@ export const LiveStatus = ({ bookingId }: Props) => {
         </button>
         <div className="space-y-4 animate-fade-in-up">
           <div className="rounded-3xl bg-card p-6 text-center shadow-card">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <Search className="h-7 w-7 animate-pulse text-primary" />
+            <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${noProviderYet ? "bg-warning/10" : "bg-primary/10"}`}>
+              <Search className={`h-7 w-7 ${noProviderYet ? "text-warning" : "animate-pulse text-primary"}`} />
             </div>
-            <h2 className="mt-4 text-lg font-bold text-foreground">Finding your partner</h2>
+            <h2 className="mt-4 text-lg font-bold text-foreground">
+              {noProviderYet ? "Still searching…" : "Finding your partner"}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Looking for available professionals near you…
+              {noProviderYet
+                ? `No partners have accepted yet (${searchMinutes} min). Try waiting a bit longer or cancel.`
+                : "Looking for available professionals near you…"}
             </p>
-            <div className="mt-4 flex items-center justify-center gap-1.5">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <span className="text-xs font-medium text-primary">Searching nearby partners</span>
-            </div>
+            {!noProviderYet && (
+              <div className="mt-4 flex items-center justify-center gap-1.5">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-xs font-medium text-primary">Searching nearby partners</span>
+              </div>
+            )}
+            {noProviderYet && (
+              <div className="mt-4 rounded-xl bg-warning/10 border border-warning/20 px-3 py-2 text-xs text-warning font-medium">
+                Partners in your area may not be available right now. You can cancel for free.
+              </div>
+            )}
           </div>
           <div className="rounded-3xl bg-card p-5 shadow-soft">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking details</p>
@@ -94,7 +112,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
             }}
             className="w-full rounded-2xl border border-destructive/30 bg-card py-3 text-sm font-bold text-destructive shadow-soft"
           >
-            Cancel booking
+            Cancel booking (free)
           </button>
         </div>
       </div>
@@ -297,10 +315,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
               Service time will only be calculated after OTP verification.
             </p>
-            <div className="mt-3 rounded-xl border border-dashed border-border bg-card/60 py-2 text-center">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Test OTP</p>
-              <p className="mt-0.5 font-mono text-lg font-bold tracking-[0.35em] text-primary">{booking.startOtp}</p>
-            </div>
           </form>
         )}
 
