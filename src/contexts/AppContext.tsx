@@ -307,9 +307,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             } else if (role === "partner" && b.status === "searching" && !row.partner_id && row.user_id !== user.id) {
               setAvailableBookings((prev) => prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x));
             }
-            // Update in own bookings if user is involved
+            // Update in own bookings if user is involved.
+            // Preserve the local professional when the DB row doesn't have one — this
+            // prevents a Realtime update (e.g. OTP start) from wiping the partner info
+            // that was set locally via partnerAcceptBooking.
             if (row.user_id === user.id || row.partner_id === user.id) {
-              setBookings((prev) => prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x));
+              setBookings((prev) =>
+                prev.map((x) => {
+                  if (x.id !== b.id) return x;
+                  return {
+                    ...b,
+                    acceptedBy: x.acceptedBy,
+                    professional: b.professional ?? x.professional,
+                  };
+                }),
+              );
             }
           } else if (payload.eventType === "DELETE") {
             const id = (payload.old as { id: string }).id;

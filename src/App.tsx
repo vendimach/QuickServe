@@ -15,7 +15,7 @@ import NotFound from "./pages/NotFound.tsx";
 const queryClient = new QueryClient();
 
 const Protected = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
@@ -24,6 +24,7 @@ const Protected = ({ children }: { children: React.ReactNode }) => {
     );
   }
   if (!user) return <Navigate to="/auth" replace />;
+  if (!profile?.mobile_verified || !profile?.aadhaar_verified) return <Navigate to="/auth" replace />;
   return <>{children}</>;
 };
 

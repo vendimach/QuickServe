@@ -101,7 +101,15 @@ export const LiveStatus = ({ bookingId }: Props) => {
     );
   }
 
-  if (!booking.professional) return null;
+  // Graceful fallback professional so the page never goes blank mid-service
+  const professional = booking.professional ?? {
+    id: "unknown",
+    name: "Your Professional",
+    rating: 5,
+    jobs: 0,
+    avatar: "P",
+    eta: "—",
+  };
 
   const arrived = booking.status === "in-progress" || !!booking.arrivedAt;
   const completed = booking.status === "completed";
@@ -124,7 +132,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
   };
 
   // ETA timer countdown — compressed to match AppContext arrival sim (8s per minute)
-  const etaMinutes = parseInt(booking.professional.eta) || 8;
+  const etaMinutes = parseInt(professional.eta) || 8;
   const etaTotalMs = Math.max(Math.min(etaMinutes, 1) * 1000 * 8, 8000);
   const startedMs = booking.confirmedAt?.getTime() ?? booking.createdAt.getTime();
   const elapsedMs = now - startedMs;
@@ -195,10 +203,10 @@ export const LiveStatus = ({ bookingId }: Props) => {
                 style={{ left: `${10 + progressPct * 0.7}%` }}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-full gradient-primary text-xs font-bold text-primary-foreground shadow-glow ring-4 ring-primary/30">
-                  {booking.professional.avatar}
+                  {professional.avatar}
                 </div>
                 <span className="mt-1 block rounded bg-card px-1.5 py-0.5 text-[9px] font-semibold shadow-soft">
-                  {arrived ? "Arrived" : `${booking.professional.name.split(" ")[0]}`}
+                  {arrived ? "Arrived" : `${professional.name.split(" ")[0]}`}
                 </span>
               </div>
               <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-card/90 px-2 py-1 text-[10px] font-bold text-foreground shadow-soft backdrop-blur-sm">
@@ -216,7 +224,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Distance</p>
-                <p className="text-base font-bold text-foreground">{booking.professional.distance ?? "—"}</p>
+                <p className="text-base font-bold text-foreground">{professional.distance ?? "—"}</p>
               </div>
             </div>
             <div className="h-1.5 w-full bg-muted">
@@ -242,7 +250,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
                 {booking.type === "instant"
                   ? arrived
                     ? "Your professional is on-site"
-                    : `Arriving in ${booking.professional.eta}`
+                    : `Arriving in ${professional.eta}`
                   : booking.scheduledAt
                     ? `Scheduled for ${booking.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}`
                     : "Scheduled"}
@@ -264,7 +272,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
               <div>
                 <p className="text-sm font-bold text-foreground">Enter start OTP</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Ask {booking.professional.name.split(" ")[0]} for the 4-digit code
+                  Ask {professional.name.split(" ")[0]} for the 4-digit code
                 </p>
               </div>
             </div>
@@ -301,22 +309,22 @@ export const LiveStatus = ({ bookingId }: Props) => {
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your Professional</p>
           <button
             onClick={() =>
-              navigate({ name: "partner-profile", partnerId: booking.professional!.id })
+              navigate({ name: "partner-profile", partnerId: professional.id })
             }
             className="mt-3 flex w-full items-center gap-3 text-left"
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-full gradient-primary text-base font-bold text-primary-foreground shadow-soft">
-              {booking.professional.avatar}
+              {professional.avatar}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-foreground">{booking.professional.name}</p>
+              <p className="text-sm font-bold text-foreground">{professional.name}</p>
               <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
                   <Star className="h-3 w-3 fill-warning text-warning" />
-                  <span className="font-semibold text-foreground">{booking.professional.rating}</span>
+                  <span className="font-semibold text-foreground">{professional.rating}</span>
                 </span>
                 <span>•</span>
-                <span>{booking.professional.jobs.toLocaleString()} jobs</span>
+                <span>{professional.jobs.toLocaleString()} jobs</span>
               </div>
             </div>
             <span className="text-[10px] font-semibold text-primary">View ›</span>
