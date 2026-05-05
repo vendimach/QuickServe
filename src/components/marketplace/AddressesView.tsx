@@ -208,7 +208,7 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
                 {[geo.city, geo.state, geo.pincode].filter(Boolean).join(", ")}
               </p>
               <p className="mt-0.5 text-[10px] text-success flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Pinned at {geo.lat.toFixed(4)}, {geo.lng.toFixed(4)}
+                <CheckCircle2 className="h-3 w-3" /> Location pinned
               </p>
             </div>
             <button

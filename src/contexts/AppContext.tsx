@@ -308,9 +308,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           } else if (payload.eventType === "UPDATE") {
             const row = payload.new as BookingRow;
             const b = rowToBooking(row);
-            // Remove from availableBookings when no longer searching or has been accepted
+            // Remove from availableBookings the moment the row leaves the
+            // 'searching' state (cancelled, refunded, accepted, …). This is
+            // what drives instant removal of cancelled requests on the
+            // partner dashboard with no refresh.
             if (b.status !== "searching" || row.partner_id) {
-              setAvailableBookings((prev) => prev.filter((x) => x.id !== b.id));
+              setAvailableBookings((prev) => {
+                const next = prev.filter((x) => x.id !== b.id);
+                if (next.length !== prev.length) {
+                  console.log(`[realtime] removing booking ${b.id} from incoming requests (status=${b.status}, partner_id=${row.partner_id ?? "null"})`);
+                }
+                return next;
+              });
             } else if (role === "partner" && b.status === "searching" && !row.partner_id && row.user_id !== user.id) {
               setAvailableBookings((prev) => prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x));
             }

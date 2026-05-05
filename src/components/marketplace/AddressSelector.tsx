@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Crosshair, Loader2, AlertCircle, MapPin, CheckCircle2, X } from "lucide-react";
 import { AddressSearch, type GeoAddress } from "./AddressSearch";
 import { Input } from "@/components/ui/input";
+import { olaReverseGeocode } from "@/lib/olaMaps";
 
 export type { GeoAddress };
 
@@ -22,7 +23,13 @@ export const AddressSelector = ({ onChange, placeholder = "Search area, street o
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSelect = (geo: GeoAddress) => {
+  // Receive a place from EITHER the search (API lat/lng) OR the GPS path.
+  // Whichever path called us, we trust its lat/lng and stash it as `pending`
+  // — Phase 2 only refines the human-readable text, never the coordinates.
+  const handleSelect = (geo: GeoAddress, source: "search" | "gps") => {
+    console.log(
+      `[address-source] selected via ${source}: lat=${geo.lat.toFixed(6)} lng=${geo.lng.toFixed(6)}`,
+    );
     setError(null);
     setPending(geo);
     setDetails("");
@@ -31,7 +38,12 @@ export const AddressSelector = ({ onChange, placeholder = "Search area, street o
   const handleConfirm = () => {
     if (!pending) return;
     const refinedLine1 = [details.trim(), pending.line1].filter(Boolean).join(", ");
-    onChange({ ...pending, line1: refinedLine1 || pending.label.split(",")[0] });
+    // Spread `pending` last so its lat/lng can never be silently overwritten.
+    const final: GeoAddress = { ...pending, line1: refinedLine1 || pending.label.split(",")[0] };
+    console.log(
+      `[address-source] confirmed final coordinates: lat=${final.lat.toFixed(6)} lng=${final.lng.toFixed(6)}`,
+    );
+    onChange(final);
     setPending(null);
     setDetails("");
   };
@@ -48,27 +60,31 @@ export const AddressSelector = ({ onChange, placeholder = "Search area, street o
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const { latitude: lat, longitude: lng } = pos.coords;
-          console.log(`[geolocation] GPS acquired (highAccuracy=${highAccuracy}): ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          console.log(
+            `[address-source] GPS coords (highAccuracy=${highAccuracy}): ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+          );
           try {
-            const res = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
-              { headers: { "Accept-Language": "en" } },
+            const place = await olaReverseGeocode(lat, lng);
+            handleSelect(
+              {
+                label: place?.label || "Current location",
+                line1: place?.line1 || place?.label?.split(",")[0] || "",
+                city: place?.city ?? "",
+                state: place?.state ?? "",
+                pincode: place?.pincode ?? "",
+                // GPS path: use the device's coordinates, not the geocoder's
+                // re-projected ones — those can drift to a road centroid.
+                lat,
+                lng,
+              },
+              "gps",
             );
-            const data = await res.json();
-            const addr = data.address ?? {};
-            const parts = [addr.house_number, addr.road, addr.neighbourhood || addr.suburb].filter(Boolean);
-            handleSelect({
-              label: data.display_name || "Current location",
-              line1: parts.join(", ") || data.display_name?.split(",")[0] || "",
-              city: addr.city || addr.town || addr.village || "",
-              state: addr.state || "",
-              pincode: addr.postcode || "",
-              lat,
-              lng,
-            });
           } catch {
             // Coordinates captured even if reverse-geocoding fails; user can fill details
-            handleSelect({ label: "Current location", line1: "", city: "", state: "", pincode: "", lat, lng });
+            handleSelect(
+              { label: "Current location", line1: "", city: "", state: "", pincode: "", lat, lng },
+              "gps",
+            );
           } finally {
             setLocating(false);
           }
@@ -110,7 +126,7 @@ export const AddressSelector = ({ onChange, placeholder = "Search area, street o
             )}
             <p className="mt-0.5 flex items-center gap-1 text-[10px] text-success">
               <CheckCircle2 className="h-3 w-3" />
-              {pending.lat.toFixed(5)}, {pending.lng.toFixed(5)}
+              Location pinned
             </p>
           </div>
           <button
@@ -165,14 +181,14 @@ export const AddressSelector = ({ onChange, placeholder = "Search area, street o
       </button>
       <AddressSearch
         placeholder={placeholder}
-        onSelect={handleSelect}
+        onSelect={(geo) => handleSelect(geo, "search")}
       />
       {error && (
         <p className="flex items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {error}
         </p>
       )}
-      <p className="text-center text-[10px] text-muted-foreground">Powered by OpenStreetMap · India only</p>
+      <p className="text-center text-[10px] text-muted-foreground">Powered by Ola Maps · India only</p>
     </div>
   );
 };

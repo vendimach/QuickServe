@@ -87,50 +87,50 @@ export const PartnerDashboard = () => {
     }
   }, [dbSchedule]);
 
-  // Distance-aware filtering:
-  //   Instant   → partner's LIVE GPS,       ≤ INSTANT_RADIUS_KM (10 km)
-  //   Scheduled → partner's saved HOME loc, ≤ SCHEDULED_RADIUS_KM (30 km)
-  const nearbyRequests = availableBookings.filter((b) => {
+  // Pending requests = anything still in 'searching' with no partner assigned.
+  // Defensive guard against stale rows after a realtime reconnect.
+  const pendingRequests = availableBookings.filter(
+    (b) => b.status === "searching" && !b.partnerUserId,
+  );
+
+  // Distance filter shared by both instant and reserved.
+  // Reserved (scheduled) bookings MUST evaluate against the partner's saved
+  // HOME location — never live GPS — per product spec, and run independently
+  // of the instant flow so they show up even when the partner is not live.
+  const withinRadius = (b: typeof pendingRequests[number], radiusKm: number, refLat: number | null, refLng: number | null): boolean => {
     if (!b.userLat || !b.userLng) {
-      // Booking was created without geo-coordinates (pre-unified-address legacy).
-      // Keep it visible so it isn't silently lost, but log so it can be diagnosed.
       console.warn(`[distance] booking ${b.id} (${b.type}) has no user coordinates — showing by default`);
       return true;
     }
-
-    if (b.type === "scheduled") {
-      const refLat = homeLat ?? partnerLat;
-      const refLng = homeLng ?? partnerLng;
-      if (refLat == null || refLng == null) {
-        console.warn(`[distance] booking ${b.id} (scheduled): partner has no home/live location — showing by default`);
-        return true;
-      }
-      const dist = haversineKm(refLat, refLng, b.userLat, b.userLng);
-      const pass = dist <= SCHEDULED_RADIUS_KM;
-      console.log(
-        `[distance] booking ${b.id} (scheduled):` +
-        ` user=(${b.userLat.toFixed(4)}, ${b.userLng.toFixed(4)})` +
-        ` partner_home=(${refLat.toFixed(4)}, ${refLng.toFixed(4)})` +
-        ` dist=${dist.toFixed(2)} km  max=${SCHEDULED_RADIUS_KM} km  → ${pass ? "SHOW" : "HIDE"}`,
-      );
-      return pass;
-    }
-
-    // instant
-    if (partnerLat == null || partnerLng == null) {
-      console.warn(`[distance] booking ${b.id} (instant): partner has no live GPS — showing by default`);
+    if (refLat == null || refLng == null) {
+      console.warn(`[distance] booking ${b.id} (${b.type}): no partner reference location yet — showing by default`);
       return true;
     }
-    const dist = haversineKm(partnerLat, partnerLng, b.userLat, b.userLng);
-    const pass = dist <= INSTANT_RADIUS_KM;
+    const dist = haversineKm(refLat, refLng, b.userLat, b.userLng);
+    const pass = dist <= radiusKm;
     console.log(
-      `[distance] booking ${b.id} (instant):` +
+      `[distance] booking ${b.id} (${b.type}):` +
       ` user=(${b.userLat.toFixed(4)}, ${b.userLng.toFixed(4)})` +
-      ` partner_live=(${partnerLat.toFixed(4)}, ${partnerLng.toFixed(4)})` +
-      ` dist=${dist.toFixed(2)} km  max=${INSTANT_RADIUS_KM} km  → ${pass ? "SHOW" : "HIDE"}`,
+      ` partner_ref=(${refLat.toFixed(4)}, ${refLng.toFixed(4)})` +
+      ` dist=${dist.toFixed(2)} km  max=${radiusKm} km  → ${pass ? "SHOW" : "HIDE"}`,
     );
     return pass;
-  });
+  };
+
+  // Instant: live GPS, ≤ 10 km
+  const instantRequests = pendingRequests.filter(
+    (b) => b.type === "instant" && withinRadius(b, INSTANT_RADIUS_KM, partnerLat, partnerLng),
+  );
+
+  // Reserved (scheduled): partner's DEFAULT home location, ≤ 30 km.
+  // Falls back to live GPS only if the partner has not yet set a home area
+  // (so a brand-new partner still sees something while we wait for them to
+  // configure their default).
+  const reservedRefLat = homeLat ?? partnerLat;
+  const reservedRefLng = homeLng ?? partnerLng;
+  const reservedRequests = pendingRequests.filter(
+    (b) => b.type === "scheduled" && withinRadius(b, SCHEDULED_RADIUS_KM, reservedRefLat, reservedRefLng),
+  );
 
   // Partner's active jobs (confirmed / in-progress)
   const activeJobs = bookings.filter(
@@ -224,10 +224,15 @@ export const PartnerDashboard = () => {
           onChange={async (v) => {
             await setAvailableNow(v);
             push({ kind: v ? "success" : "info", title: v ? "You're live — instant requests enabled" : "Instant requests paused" });
-            // On going live, save current GPS as home location for scheduled booking radius
-            if (v && user && navigator.geolocation) {
+            // First-time only: if partner has never set a home area, seed it with
+            // the current GPS so scheduled-booking radius has a reference.
+            // NEVER overwrite an explicitly chosen home area — that's a data loss
+            // bug that would silently replace a search-picked location with GPS.
+            const noHomeSet = homeLat == null || homeLng == null;
+            if (v && user && noHomeSet && navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
                 ({ coords }) => {
+                  console.log(`[partner-location] seeding home area from GPS (no prior home set): ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
                   supabase.from("profiles").update({ home_lat: coords.latitude, home_lng: coords.longitude }).eq("id", user.id).then(() => {});
                 },
                 () => {},
@@ -289,9 +294,7 @@ export const PartnerDashboard = () => {
                   </p>
                 </>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Saved at {homeLat!.toFixed(4)}, {homeLng!.toFixed(4)}
-                </p>
+                <p className="text-xs text-muted-foreground">Home area saved</p>
               )}
             </div>
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
@@ -470,18 +473,16 @@ export const PartnerDashboard = () => {
         </section>
       )}
 
-      {/* Incoming Requests — gated exclusively by "Available right now" toggle.
-           "Show in today's listings" controls profile visibility for scheduled bookings,
-           NOT whether instant real-time requests are received. */}
+      {/* Instant Requests — gated by "Available right now". Live GPS, 10 km radius. */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-foreground">Instant Requests</h2>
-            <p className="text-[10px] text-muted-foreground">Real-time • {INSTANT_RADIUS_KM} km instant · {SCHEDULED_RADIUS_KM} km scheduled</p>
+            <p className="text-[10px] text-muted-foreground">Real-time · {INSTANT_RADIUS_KM} km of your live location</p>
           </div>
-          {availableNow && nearbyRequests.length > 0 && (
+          {availableNow && instantRequests.length > 0 && (
             <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
-              {nearbyRequests.length} new
+              {instantRequests.length} new
             </span>
           )}
         </div>
@@ -493,7 +494,7 @@ export const PartnerDashboard = () => {
               Toggle "Available right now" above to start receiving real-time job requests
             </p>
           </div>
-        ) : nearbyRequests.length === 0 ? (
+        ) : instantRequests.length === 0 ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
             <div className="flex items-center justify-center gap-1.5 text-success mb-2">
               <Zap className="h-4 w-4" />
@@ -501,74 +502,144 @@ export const PartnerDashboard = () => {
             </div>
             <p className="text-sm font-semibold text-foreground">Waiting for requests</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              No new requests within {INSTANT_RADIUS_KM} km right now. You'll be notified instantly.
+              No instant requests within {INSTANT_RADIUS_KM} km right now.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {nearbyRequests.map((r) => {
-              // For display: instant uses live GPS, scheduled uses home location
-              const refLat = r.type === "scheduled" ? (homeLat ?? partnerLat) : partnerLat;
-              const refLng = r.type === "scheduled" ? (homeLng ?? partnerLng) : partnerLng;
-              const distKm =
-                refLat && refLng && r.userLat && r.userLng
-                  ? haversineKm(refLat, refLng, r.userLat, r.userLng).toFixed(1) + " km"
-                  : null;
-              return (
-                <div key={r.id} className="overflow-hidden rounded-2xl bg-card shadow-card animate-fade-in-up">
-                  <div className="flex items-center justify-between bg-secondary px-4 py-2">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold">
-                      {r.type === "instant" ? (
-                        <><Zap className="h-3.5 w-3.5 text-primary" /><span className="text-primary">Instant Request</span></>
-                      ) : (
-                        <><CalendarClock className="h-3.5 w-3.5 text-accent" /><span className="text-accent">Scheduled</span></>
-                      )}
-                    </div>
-                    <span className="text-xs font-bold text-foreground">₹{r.service.price}</span>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-sm font-bold text-foreground">{r.service.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Customer request</p>
-                    <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
-                      {distKm && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-primary" /> {distKm}
-                        </span>
-                      )}
-                      <span className="truncate">{r.address}</span>
-                    </div>
-                    {r.scheduledAt && (
-                      <p className="mt-1 text-[11px] font-medium text-foreground">
-                        {r.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
-                      </p>
-                    )}
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => respond(r.id, "decline")}
-                        disabled={accepting === r.id}
-                        className="flex items-center justify-center gap-1 rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary disabled:opacity-50"
-                      >
-                        <X className="h-3.5 w-3.5" /> Decline
-                      </button>
-                      <button
-                        onClick={() => respond(r.id, "accept")}
-                        disabled={accepting === r.id}
-                        className="flex items-center justify-center gap-1 rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft transition-bounce active:scale-95 disabled:opacity-60"
-                      >
-                        {accepting === r.id ? (
-                          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Accepting…</>
-                        ) : (
-                          <><CheckCircle2 className="h-3.5 w-3.5" /> Accept</>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {instantRequests.map((r) => (
+              <RequestCard
+                key={r.id}
+                request={r}
+                refLat={partnerLat}
+                refLng={partnerLng}
+                accepting={accepting === r.id}
+                onAccept={() => respond(r.id, "accept")}
+                onDecline={() => respond(r.id, "decline")}
+              />
+            ))}
           </div>
         )}
       </section>
+
+      {/* Reserved Requests — gated by "Show in today's listings". Home location, 30 km radius.
+           Independent of availableNow so partners receive scheduled jobs even when not live. */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-foreground">Reserved Requests</h2>
+            <p className="text-[10px] text-muted-foreground">Scheduled · {SCHEDULED_RADIUS_KM} km of your home area</p>
+          </div>
+          {listedToday && reservedRequests.length > 0 && (
+            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold uppercase text-accent">
+              {reservedRequests.length} new
+            </span>
+          )}
+        </div>
+        {!listedToday ? (
+          <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
+            <CalendarClock className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm font-semibold text-foreground">Listings are off</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Toggle "Show in today's listings" above to receive reserved bookings
+            </p>
+          </div>
+        ) : reservedRequests.length === 0 ? (
+          <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
+            <div className="flex items-center justify-center gap-1.5 text-accent mb-2">
+              <CalendarClock className="h-4 w-4" />
+              <span className="text-xs font-bold uppercase tracking-wider">Listed</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">No reserved bookings nearby</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              No scheduled bookings within {SCHEDULED_RADIUS_KM} km of your home area.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {reservedRequests.map((r) => (
+              <RequestCard
+                key={r.id}
+                request={r}
+                refLat={reservedRefLat}
+                refLng={reservedRefLng}
+                accepting={accepting === r.id}
+                onAccept={() => respond(r.id, "accept")}
+                onDecline={() => respond(r.id, "decline")}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
+
+interface RequestCardProps {
+  request: import("@/types").Booking;
+  refLat: number | null;
+  refLng: number | null;
+  accepting: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+}
+
+const RequestCard = ({ request: r, refLat, refLng, accepting, onAccept, onDecline }: RequestCardProps) => {
+  const distKm =
+    refLat != null && refLng != null && r.userLat != null && r.userLng != null
+      ? haversineKm(refLat, refLng, r.userLat, r.userLng).toFixed(1) + " km"
+      : null;
+  const isReserved = r.type === "scheduled";
+  return (
+    <div className="overflow-hidden rounded-2xl bg-card shadow-card animate-fade-in-up">
+      <div className="flex items-center justify-between bg-secondary px-4 py-2">
+        <div className="flex items-center gap-1.5 text-xs font-semibold">
+          {isReserved ? (
+            <><CalendarClock className="h-3.5 w-3.5 text-accent" /><span className="text-accent">Reserved</span></>
+          ) : (
+            <><Zap className="h-3.5 w-3.5 text-primary" /><span className="text-primary">Instant Request</span></>
+          )}
+        </div>
+        <span className="text-xs font-bold text-foreground">₹{r.service.price}</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm font-bold text-foreground">{r.service.name}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Customer request</p>
+        <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+          {distKm && (
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3 w-3 text-primary" /> {distKm}
+            </span>
+          )}
+          <span className="truncate">{r.address}</span>
+        </div>
+        {isReserved && r.scheduledAt && (
+          <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-foreground">
+            <CalendarClock className="h-3 w-3 text-accent" />
+            {r.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+          </p>
+        )}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={onDecline}
+            disabled={accepting}
+            className="flex items-center justify-center gap-1 rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary disabled:opacity-50"
+          >
+            <X className="h-3.5 w-3.5" /> Decline
+          </button>
+          <button
+            onClick={onAccept}
+            disabled={accepting}
+            className="flex items-center justify-center gap-1 rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft transition-bounce active:scale-95 disabled:opacity-60"
+          >
+            {accepting ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Accepting…</>
+            ) : (
+              <><CheckCircle2 className="h-3.5 w-3.5" /> Accept</>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

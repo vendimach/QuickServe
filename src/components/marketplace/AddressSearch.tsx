@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, MapPin, Loader2 } from "lucide-react";
+import { olaAutocomplete } from "@/lib/olaMaps";
 
 export interface GeoAddress {
   label: string;
@@ -33,36 +34,20 @@ export const AddressSearch = ({ onSelect, placeholder = "Search for an addressâ€
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({
-          format: "json",
-          q: query,
-          countrycodes: "in",
-          limit: "5",
-          addressdetails: "1",
-        });
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?${params.toString()}`,
-          { headers: { "Accept-Language": "en" } },
-        );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data: any[] = await res.json();
-        const mapped: GeoAddress[] = data.map((item) => {
-          const a: Record<string, string> = item.address ?? {};
-          const parts = [a.house_number, a.road, a.neighbourhood, a.suburb].filter(Boolean);
-          const line1 = parts.length > 0 ? parts.join(", ") : item.display_name.split(",")[0];
-          return {
-            label: item.display_name as string,
-            line1,
-            city: a.city ?? a.town ?? a.village ?? a.county ?? "",
-            state: a.state ?? "",
-            pincode: a.postcode ?? "",
-            lat: parseFloat(item.lat as string),
-            lng: parseFloat(item.lon as string),
-          };
-        });
+        const places = await olaAutocomplete(query);
+        const mapped: GeoAddress[] = places.map((p) => ({
+          label: p.label,
+          line1: p.line1 || p.label.split(",")[0],
+          city: p.city ?? "",
+          state: p.state ?? "",
+          pincode: p.pincode ?? "",
+          lat: p.lat,
+          lng: p.lng,
+        }));
         setResults(mapped);
         setOpen(mapped.length > 0);
-      } catch {
+      } catch (err) {
+        console.warn("[ola-autocomplete] failed", err);
         setResults([]);
         setOpen(false);
       } finally {
@@ -98,6 +83,13 @@ export const AddressSearch = ({ onSelect, placeholder = "Search for an addressâ€
                 type="button"
                 className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-smooth hover:bg-secondary"
                 onClick={() => {
+                  // Critical: emit the API-provided lat/lng for the picked place.
+                  // Never fall back to GPS coords here â€” those belong to the
+                  // "Use my current location" path and would silently mis-tag
+                  // the address if mixed in.
+                  console.log(
+                    `[address-source] search-selected place: lat=${r.lat.toFixed(6)} lng=${r.lng.toFixed(6)} label=${r.label}`,
+                  );
                   onSelect(r);
                   setQuery(r.line1);
                   setOpen(false);
