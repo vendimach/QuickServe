@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye,
-  CalendarDays, Plus, Trash2, ChevronRight, Loader2,
+  CalendarDays, Plus, Trash2, ChevronRight, Loader2, Home,
 } from "lucide-react";
 import type { DayOfWeek, Professional } from "@/types";
 import { useApp } from "@/contexts/AppContext";
@@ -10,10 +10,11 @@ import { usePartnerData } from "@/contexts/PartnerDataContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { AddressSelector, type GeoAddress } from "./AddressSelector";
 
 const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const INSTANT_RADIUS_KM = 10;
-const SCHEDULED_RADIUS_KM = 35;
+const SCHEDULED_RADIUS_KM = 30;
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -47,20 +48,35 @@ export const PartnerDashboard = () => {
   const [accepting, setAccepting] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<{ days: DayOfWeek[]; start: string; end: string }[]>([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [homeGeo, setHomeGeo] = useState<GeoAddress | null>(null);
+  const [savingHome, setSavingHome] = useState(false);
+  const [showHomeSelector, setShowHomeSelector] = useState(false);
 
   // Partner's saved home location (from profiles) — used for scheduled booking radius
-  const homeLat = (profile as { home_lat?: number | null } | null)?.home_lat ?? null;
-  const homeLng = (profile as { home_lng?: number | null } | null)?.home_lng ?? null;
+  const homeLat = profile?.home_lat ?? null;
+  const homeLng = profile?.home_lng ?? null;
 
   // Get partner's live GPS for instant-booking radius
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setPartnerLat(pos.coords.latitude); setPartnerLng(pos.coords.longitude); },
-      () => {},
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        console.log(`[partner-location] live GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        setPartnerLat(latitude);
+        setPartnerLng(longitude);
+      },
+      () => { console.warn("[partner-location] live GPS unavailable"); },
       { enableHighAccuracy: true, timeout: 8000 },
     );
   }, []);
+
+  // Log home area whenever it changes
+  useEffect(() => {
+    if (homeLat && homeLng) {
+      console.log(`[partner-location] home area: ${homeLat.toFixed(6)}, ${homeLng.toFixed(6)}`);
+    }
+  }, [homeLat, homeLng]);
 
   // Hydrate local form state from persisted schedule
   useEffect(() => {
@@ -72,19 +88,48 @@ export const PartnerDashboard = () => {
   }, [dbSchedule]);
 
   // Distance-aware filtering:
-  //   Instant → partner's LIVE GPS, 10 km
-  //   Scheduled → partner's saved HOME location (profiles.home_lat/lng), 35 km
+  //   Instant   → partner's LIVE GPS,       ≤ INSTANT_RADIUS_KM (10 km)
+  //   Scheduled → partner's saved HOME loc, ≤ SCHEDULED_RADIUS_KM (30 km)
   const nearbyRequests = availableBookings.filter((b) => {
-    if (!b.userLat || !b.userLng) return true; // booking has no geocoded location — show
+    if (!b.userLat || !b.userLng) {
+      // Booking was created without geo-coordinates (pre-unified-address legacy).
+      // Keep it visible so it isn't silently lost, but log so it can be diagnosed.
+      console.warn(`[distance] booking ${b.id} (${b.type}) has no user coordinates — showing by default`);
+      return true;
+    }
+
     if (b.type === "scheduled") {
       const refLat = homeLat ?? partnerLat;
       const refLng = homeLng ?? partnerLng;
-      if (!refLat || !refLng) return true; // no reference — show
-      return haversineKm(refLat, refLng, b.userLat, b.userLng) <= SCHEDULED_RADIUS_KM;
+      if (refLat == null || refLng == null) {
+        console.warn(`[distance] booking ${b.id} (scheduled): partner has no home/live location — showing by default`);
+        return true;
+      }
+      const dist = haversineKm(refLat, refLng, b.userLat, b.userLng);
+      const pass = dist <= SCHEDULED_RADIUS_KM;
+      console.log(
+        `[distance] booking ${b.id} (scheduled):` +
+        ` user=(${b.userLat.toFixed(4)}, ${b.userLng.toFixed(4)})` +
+        ` partner_home=(${refLat.toFixed(4)}, ${refLng.toFixed(4)})` +
+        ` dist=${dist.toFixed(2)} km  max=${SCHEDULED_RADIUS_KM} km  → ${pass ? "SHOW" : "HIDE"}`,
+      );
+      return pass;
     }
+
     // instant
-    if (!partnerLat || !partnerLng) return true; // no live GPS — show
-    return haversineKm(partnerLat, partnerLng, b.userLat, b.userLng) <= INSTANT_RADIUS_KM;
+    if (partnerLat == null || partnerLng == null) {
+      console.warn(`[distance] booking ${b.id} (instant): partner has no live GPS — showing by default`);
+      return true;
+    }
+    const dist = haversineKm(partnerLat, partnerLng, b.userLat, b.userLng);
+    const pass = dist <= INSTANT_RADIUS_KM;
+    console.log(
+      `[distance] booking ${b.id} (instant):` +
+      ` user=(${b.userLat.toFixed(4)}, ${b.userLng.toFixed(4)})` +
+      ` partner_live=(${partnerLat.toFixed(4)}, ${partnerLng.toFixed(4)})` +
+      ` dist=${dist.toFixed(2)} km  max=${INSTANT_RADIUS_KM} km  → ${pass ? "SHOW" : "HIDE"}`,
+    );
+    return pass;
   });
 
   // Partner's active jobs (confirmed / in-progress)
@@ -149,6 +194,24 @@ export const PartnerDashboard = () => {
     }
   };
 
+  const handleSaveHomeArea = async (geo: GeoAddress) => {
+    if (!user) return;
+    setSavingHome(true);
+    try {
+      await supabase
+        .from("profiles")
+        .update({ home_lat: geo.lat, home_lng: geo.lng })
+        .eq("id", user.id);
+      setHomeGeo(geo);
+      setShowHomeSelector(false);
+      push({ kind: "success", title: "Home area updated", body: geo.line1 || geo.label.split(",")[0] });
+    } catch {
+      push({ kind: "warning", title: "Couldn't save home area. Try again." });
+    } finally {
+      setSavingHome(false);
+    }
+  };
+
   return (
     <div className="space-y-5 px-5 pb-6">
       {/* Two availability switches — with clear separation of concerns */}
@@ -186,6 +249,91 @@ export const PartnerDashboard = () => {
           }}
           color="primary"
         />
+      </div>
+
+      {/* Home area — used as reference for scheduled booking radius */}
+      <div className="rounded-2xl bg-card p-4 shadow-card space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent">
+              <Home className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Home area</p>
+              <p className="text-[11px] text-muted-foreground">
+                Used as reference for scheduled bookings ({SCHEDULED_RADIUS_KM} km radius)
+              </p>
+            </div>
+          </div>
+          {!showHomeSelector && (
+            <button
+              onClick={() => setShowHomeSelector(true)}
+              className="rounded-lg bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-foreground"
+            >
+              {homeLat || homeGeo ? "Change" : "Set"}
+            </button>
+          )}
+        </div>
+
+        {(homeGeo || homeLat) && !showHomeSelector && (
+          <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5">
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              {homeGeo ? (
+                <>
+                  <p className="truncate text-xs font-semibold text-foreground">
+                    {homeGeo.line1 || homeGeo.label.split(",")[0]}
+                  </p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {[homeGeo.city, homeGeo.state].filter(Boolean).join(", ")}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Saved at {homeLat!.toFixed(4)}, {homeLng!.toFixed(4)}
+                </p>
+              )}
+            </div>
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+          </div>
+        )}
+
+        {showHomeSelector && (
+          <div className="space-y-2">
+            <AddressSelector
+              placeholder="Search your home area or neighbourhood…"
+              onChange={(geo) => { setHomeGeo(geo); }}
+            />
+            {homeGeo && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setHomeGeo(null); setShowHomeSelector(false); }}
+                  className="flex-1 rounded-xl border border-border bg-card py-2 text-xs font-semibold text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingHome}
+                  onClick={() => handleSaveHomeArea(homeGeo)}
+                  className="flex-1 rounded-xl gradient-primary py-2 text-xs font-bold text-primary-foreground disabled:opacity-60"
+                >
+                  {savingHome ? <><Loader2 className="inline h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Confirm area"}
+                </button>
+              </div>
+            )}
+            {!homeGeo && (
+              <button
+                type="button"
+                onClick={() => setShowHomeSelector(false)}
+                className="w-full rounded-xl border border-border bg-card py-2 text-xs font-semibold text-foreground"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Schedule editor */}

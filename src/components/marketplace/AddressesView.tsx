@@ -1,24 +1,13 @@
 import { useState } from "react";
-import { ArrowLeft, MapPin, Plus, Trash2, Star, Crosshair, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, MapPin, Plus, Trash2, Star, Loader2, CheckCircle2, Pencil } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useUserData, type SavedAddress } from "@/contexts/UserDataContext";
-import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-
-const INDIAN_STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
-  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
-  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
-  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
-  "Delhi", "Jammu & Kashmir", "Ladakh", "Puducherry", "Chandigarh",
-  "Dadra & Nagar Haveli and Daman & Diu", "Lakshadweep",
-  "Andaman & Nicobar Islands",
-];
+import { AddressSelector, type GeoAddress } from "./AddressSelector";
 
 export const AddressesView = () => {
   const { navigate } = useApp();
@@ -85,11 +74,16 @@ export const AddressesView = () => {
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {a.line1}{a.city ? `, ${a.city}` : ""}{a.state ? `, ${a.state}` : ""}{a.pincode ? ` — ${a.pincode}` : ""}
                 </p>
+                {a.latitude && a.longitude && (
+                  <p className="mt-0.5 text-[10px] text-success flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Geo-verified
+                  </p>
+                )}
               </div>
             </button>
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="outline" className="flex-1" onClick={() => setEditing(a)}>
-                Edit
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
               <Button
                 size="sm"
@@ -139,67 +133,60 @@ export const AddressesView = () => {
 
 interface FormProps {
   existing?: SavedAddress;
-  onSaved: (a: { label: string; line1: string; city?: string; state?: string; pincode?: string; latitude?: number; longitude?: number; is_default?: boolean }) => void;
+  onSaved: (a: {
+    label: string;
+    line1: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    latitude?: number;
+    longitude?: number;
+    is_default?: boolean;
+  }) => void;
   onCancel: () => void;
 }
 
 const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
   const { updateAddress, setDefaultAddress } = useUserData();
   const [label, setLabel] = useState(existing?.label ?? "Home");
-  const [line1, setLine1] = useState(existing?.line1 ?? "");
-  const [city, setCity] = useState(existing?.city ?? "");
-  const [state, setState] = useState(existing?.state ?? "");
-  const [pincode, setPincode] = useState(existing?.pincode ?? "");
-  const [lat, setLat] = useState<number | null>(existing?.latitude ?? null);
-  const [lng, setLng] = useState<number | null>(existing?.longitude ?? null);
   const [makeDefault, setMakeDefault] = useState<boolean>(existing?.is_default ?? false);
-  const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const useMyLocation = () => {
-    if (!navigator.geolocation) return;
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setLat(latitude); setLng(longitude);
-        try {
-          const { data, error } = await supabase.functions.invoke("geocode", {
-            body: { latlng: `${latitude},${longitude}` },
-          });
-          if (error) throw error;
-          if (data?.line1) setLine1(data.line1);
-          else if (data?.formatted) setLine1(data.formatted);
-          if (data?.city) setCity(data.city);
-          if (data?.state) setState(data.state);
-          if (data?.pincode) setPincode(data.pincode);
-        } catch {
-          // lat/lng still captured; user can fill address manually
-        } finally {
-          setLocating(false);
+  // Reconstruct GeoAddress from saved fields when editing
+  const [geo, setGeo] = useState<GeoAddress | null>(
+    existing?.latitude && existing?.longitude
+      ? {
+          label: existing.line1,
+          line1: existing.line1,
+          city: existing.city ?? "",
+          state: existing.state ?? "",
+          pincode: existing.pincode ?? "",
+          lat: existing.latitude,
+          lng: existing.longitude,
         }
-      },
-      () => { setLocating(false); },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  };
+      : null,
+  );
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!line1.trim()) return;
+    if (!geo) return;
     setSaving(true);
     try {
+      const payload = {
+        label,
+        line1: geo.line1 || geo.label.split(",")[0],
+        city: geo.city || undefined,
+        state: geo.state || undefined,
+        pincode: geo.pincode || undefined,
+        latitude: geo.lat,
+        longitude: geo.lng,
+        is_default: makeDefault,
+      };
       if (existing) {
-        await updateAddress(existing.id, {
-          label, line1, city, state, pincode,
-          latitude: lat ?? undefined,
-          longitude: lng ?? undefined,
-        });
+        await updateAddress(existing.id, payload);
         if (makeDefault) await setDefaultAddress(existing.id);
-        onSaved({ label, line1, city, state, pincode, is_default: makeDefault });
-      } else {
-        onSaved({ label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });
       }
+      onSaved(payload);
     } finally {
       setSaving(false);
     }
@@ -207,44 +194,45 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
 
   return (
     <form onSubmit={submit} className="space-y-3 rounded-2xl bg-card p-4 shadow-card">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold">{existing ? "Edit address" : "New address"}</p>
-        <Button type="button" size="sm" variant="ghost" onClick={useMyLocation} disabled={locating}>
-          {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crosshair className="h-3.5 w-3.5" />}
-          <span className="ml-1 text-xs">Use my location</span>
-        </Button>
-      </div>
+      <p className="text-sm font-bold">{existing ? "Edit address" : "New address"}</p>
+
+      {geo ? (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+          <div className="flex items-start gap-2">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground">
+                {geo.line1 || geo.label.split(",")[0]}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {[geo.city, geo.state, geo.pincode].filter(Boolean).join(", ")}
+              </p>
+              <p className="mt-0.5 text-[10px] text-success flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Pinned at {geo.lat.toFixed(4)}, {geo.lng.toFixed(4)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setGeo(null)}
+              className="shrink-0 rounded-lg bg-secondary px-2 py-1 text-[11px] font-semibold text-foreground"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      ) : (
+        <AddressSelector onChange={setGeo} />
+      )}
+
       <div>
         <Label>Label</Label>
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home / Work / Other" />
+        <Input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Home / Work / Other"
+        />
       </div>
-      <div>
-        <Label>Address line</Label>
-        <Input value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="House no., street, area" required />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <Label>City</Label>
-          <Input value={city ?? ""} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
-        </div>
-        <div>
-          <Label>Pincode</Label>
-          <Input value={pincode ?? ""} onChange={(e) => setPincode(e.target.value)} inputMode="numeric" maxLength={6} placeholder="6 digits" />
-        </div>
-      </div>
-      <div>
-        <Label>State</Label>
-        <select
-          value={state ?? ""}
-          onChange={(e) => setState(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          <option value="">Select state</option>
-          {INDIAN_STATES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
+
       <label className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 cursor-pointer">
         <Checkbox
           checked={makeDefault}
@@ -252,14 +240,12 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
         />
         <span className="text-xs font-medium text-foreground">Set as default address</span>
       </label>
-      {lat && lng && (
-        <p className="flex items-center gap-1 text-[11px] text-success">
-          <CheckCircle2 className="h-3 w-3" /> Pinned at {lat.toFixed(4)}, {lng.toFixed(4)}
-        </p>
-      )}
+
       <div className="flex gap-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" className="flex-1" disabled={saving || !line1.trim()}>
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" className="flex-1" disabled={saving || !geo}>
           {saving ? "Saving…" : existing ? "Update" : "Save"}
         </Button>
       </div>

@@ -1,14 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(Get-ChildItem -Force)",
-      "Bash(Select-Object Name, Attributes)",
-      "Bash(git rm *)",
-      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\koron\\\\OneDrive\\\\Desktop\\\\QuickServe\" -Recurse -Directory)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Abhisar\\\\repos\\\\vendimach\" -Force)",
+      "Bash(Select-Object -Property Mode, Name)",
+      "Bash(Format-Table)",
+      "Bash(Find-ChildItem -Path \"C:\\\\Users\\\\Abhisar\\\\repos\\\\vendimach\\\\supabase\\\\migrations\" -Filter \"*.sql\")",
+      "Bash(Get-ChildItem)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Abhisar\\\\repos\\\\vendimach\" -Recurse -Include \"*.json\", \"*.toml\", \"*.yml\", \"*.yaml\", \"Dockerfile\")",
       "Bash(Select-Object FullName)",
-      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\koron\\\\OneDrive\\\\Desktop\\\\QuickServe\" -Recurse -Directory | ForEach-Object { $_.FullName } | Select-Object -First 50)",
-      "Bash(npm run *)",
-      "Bash(xargs basename *)"
+      "Bash(Get-ChildItem -Path C:\\\\Users\\\\Abhisar\\\\repos\\\\vendimach\\\\src -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(xargs grep *)"
     ]
   }
 }

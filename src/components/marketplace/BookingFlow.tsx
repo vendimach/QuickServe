@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus, Search, Crosshair, Loader2 } from "lucide-react";
+import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus, Search } from "lucide-react";
 import { services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
 import { useUserData } from "@/contexts/UserDataContext";
 import { PreferencesEditor } from "./PreferencesEditor";
-import { AddressSearch, type GeoAddress } from "./AddressSearch";
+import { AddressSelector, type GeoAddress } from "./AddressSelector";
 import { cancellationPolicy } from "@/data/services";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,6 @@ export const BookingFlow = ({ serviceId }: Props) => {
   const [addressPickerOpen, setAddressPickerOpen] = useState(false);
   const [addrTab, setAddrTab] = useState<"saved" | "search">("saved");
   const [geoAddress, setGeoAddress] = useState<GeoAddress | null>(null);
-  const [locating, setLocating] = useState(false);
 
   // Keep selection in sync if addresses load after first render.
   const selectedSavedAddress = useMemo(() => {
@@ -63,43 +62,6 @@ export const BookingFlow = ({ serviceId }: Props) => {
     : selectedSavedAddress;
 
   if (!service) return null;
-
-  const useMyLocation = () => {
-    if (!navigator.geolocation) return;
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
-            { headers: { "Accept-Language": "en" } },
-          );
-          const data = await res.json();
-          const addr = data.address ?? {};
-          const line1 = [
-            addr.house_number,
-            addr.road,
-            addr.neighbourhood || addr.suburb,
-          ].filter(Boolean).join(", ") || data.display_name?.split(",")[0] || "";
-          const city = addr.city || addr.town || addr.village || "";
-          const state = addr.state || "";
-          const pincode = addr.postcode || "";
-          setGeoAddress({ label: line1 || "Current location", line1, city, state, pincode, lat, lng });
-          setSelectedAddressId(null);
-          setAddressPickerOpen(false);
-        } catch {
-          setGeoAddress({ label: "Current location", line1: "", city: "", state: "", pincode: "", lat, lng });
-          setSelectedAddressId(null);
-          setAddressPickerOpen(false);
-        } finally {
-          setLocating(false);
-        }
-      },
-      () => setLocating(false),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  };
 
   const handleConfirm = () => {
     if (!mode || !selectedAddress) return;
@@ -345,31 +307,14 @@ export const BookingFlow = ({ serviceId }: Props) => {
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={useMyLocation}
-                  disabled={locating}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-2.5 text-xs font-semibold text-primary transition-smooth hover:bg-primary/10 disabled:opacity-60"
-                >
-                  {locating ? (
-                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Detecting location…</>
-                  ) : (
-                    <><Crosshair className="h-3.5 w-3.5" /> Use my current location</>
-                  )}
-                </button>
-                <AddressSearch
-                  placeholder="Type area, street or landmark…"
-                  onSelect={(r) => {
-                    setGeoAddress(r);
-                    setSelectedAddressId(null);
-                    setAddressPickerOpen(false);
-                  }}
-                />
-                <p className="text-center text-[11px] text-muted-foreground">
-                  Powered by OpenStreetMap • India only
-                </p>
-              </div>
+              <AddressSelector
+                placeholder="Type area, street or landmark…"
+                onChange={(r) => {
+                  setGeoAddress(r);
+                  setSelectedAddressId(null);
+                  setAddressPickerOpen(false);
+                }}
+              />
             )}
           </div>
         )}
