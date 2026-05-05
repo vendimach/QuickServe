@@ -4,6 +4,7 @@ import {
   User as UserIcon, AlertTriangle, XCircle, CheckCircle2, Timer, Loader2,
   KeyRound, Copy,
 } from "lucide-react";
+
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -100,6 +101,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
   const status = realBooking?.status;
   const isInProgress = status === "in-progress";
   const isCompleted = status === "completed";
+  const isCancelled = status === "cancelled" || status === "refunded";
   const isInstant = job.type === "instant";
   const partnerFine = isInProgress ? 200 : 100;
 
@@ -122,7 +124,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
           earned_at: new Date().toISOString(),
         });
       }
-      navigate({ name: "partner-dashboard" });
+      // Don't navigate — reactive state will show the cancelled screen below
     } finally {
       setCancelling(false);
     }
@@ -149,6 +151,43 @@ export const PartnerJobView = ({ bookingId }: Props) => {
       setCompleting(false);
     }
   };
+
+  // Cancelled / refunded terminal state
+  if (isCancelled) {
+    return (
+      <div className="px-5 pb-6">
+        <button
+          onClick={() => navigate({ name: "partner-dashboard" })}
+          className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to dashboard
+        </button>
+        <div className="rounded-3xl bg-card p-6 text-center shadow-card animate-fade-in-up">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+            <XCircle className="h-8 w-8 text-destructive" />
+          </div>
+          <h2 className="mt-4 text-lg font-bold text-foreground">Job Cancelled</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{job.serviceName}</p>
+          {realBooking?.cancellationReason && (
+            <p className="mt-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              Reason: {realBooking.cancellationReason}
+            </p>
+          )}
+          {(realBooking?.cancellationFee ?? 0) > 0 && (
+            <p className="mt-2 text-xs text-destructive font-medium">
+              Fine deducted: ₹{realBooking?.cancellationFee}
+            </p>
+          )}
+          <button
+            onClick={() => navigate({ name: "partner-dashboard" })}
+            className="mt-5 w-full rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 px-5 pb-6">

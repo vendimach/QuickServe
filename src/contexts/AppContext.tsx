@@ -139,6 +139,7 @@ type BookingRow = {
   completed_at: string | null;
   cancelled_at: string | null;
   cancellation_fee: number | null;
+  cancellation_reason: string | null;
   professional_id: string | null;
   professional_name: string | null;
   partner_id: string | null;
@@ -192,6 +193,7 @@ const rowToBooking = (r: BookingRow): Booking => {
     completedAt: r.completed_at ? new Date(r.completed_at) : undefined,
     cancelledAt: r.cancelled_at ? new Date(r.cancelled_at) : undefined,
     cancellationFee: r.cancellation_fee ?? 0,
+    cancellationReason: r.cancellation_reason ?? undefined,
     professional,
     address: r.address,
     preferences: (r.preferences as Booking["preferences"]) ?? undefined,
@@ -504,7 +506,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setBookings((prev) =>
       prev.map((b) =>
         b.id === bookingId
-          ? { ...b, status: newStatus, cancelledAt: now, cancellationFee: fee }
+          ? { ...b, status: newStatus, cancelledAt: now, cancellationFee: fee, cancellationReason: reason }
           : b,
       ),
     );

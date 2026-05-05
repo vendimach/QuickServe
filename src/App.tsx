@@ -12,6 +12,7 @@ import { PartnerDataProvider } from "@/contexts/PartnerDataContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import Onboarding from "./pages/Onboarding.tsx";
+import Admin from "./pages/Admin.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,15 @@ const Protected = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// /admin — must be logged in AND have admin role
+const AdminGuard = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading, role } = useAuth();
+  if (loading) return <Spinner />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (role !== "admin") return <Navigate to="/" replace />;
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -73,6 +83,14 @@ const App = () => (
                       <Route
                         path="/onboarding"
                         element={<OnboardingGuard><Onboarding /></OnboardingGuard>}
+                      />
+                      <Route
+                        path="/admin"
+                        element={<AdminGuard><Admin /></AdminGuard>}
+                      />
+                      <Route
+                        path="/admin/*"
+                        element={<AdminGuard><Admin /></AdminGuard>}
                       />
                       <Route
                         path="/"

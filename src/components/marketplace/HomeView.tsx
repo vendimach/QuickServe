@@ -2,6 +2,7 @@ import { MapPin, ChevronRight, Sparkles, HeartPulse, Baby, PawPrint, Star, Shiel
 import { categories, services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { useUserData } from "@/contexts/UserDataContext";
+import { DaycareCarousel } from "./DaycareCarousel";
 import { cn } from "@/lib/utils";
 
 const iconMap = { Sparkles, HeartPulse, Baby, PawPrint };
@@ -133,6 +134,9 @@ export const HomeView = () => {
           </div>
         </div>
       </section>
+
+      {/* Affiliated daycare centers carousel */}
+      <DaycareCarousel />
 
       {/* Monthly subscription services */}
       <section className="animate-fade-in-up">

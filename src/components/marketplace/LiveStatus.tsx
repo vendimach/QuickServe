@@ -17,6 +17,8 @@ import {
   KeyRound,
   Loader2,
   Search,
+  XCircle,
+  CalendarClock,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { safetyInstructions, cancellationPolicy } from "@/data/services";
@@ -25,8 +27,7 @@ interface Props {
   bookingId: string;
 }
 
-// Milliseconds to wait in "searching" before showing "no providers" fallback
-const NO_PROVIDER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const NO_PROVIDER_TIMEOUT_MS = 5 * 60 * 1000;
 
 export const LiveStatus = ({ bookingId }: Props) => {
   const { bookings, navigate, completeBooking, cancelBooking, partnerStartService, role } = useApp();
@@ -44,7 +45,51 @@ export const LiveStatus = ({ bookingId }: Props) => {
 
   if (!booking) return null;
 
-  // Show "Finding partner…" screen while the booking is still searching
+  // Cancelled / refunded — show terminal state screen
+  if (booking.status === "cancelled" || booking.status === "refunded") {
+    return (
+      <div className="px-5 pb-6">
+        <button
+          onClick={() => navigate({ name: "home" })}
+          className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
+        >
+          <X className="h-3.5 w-3.5" /> Back to Home
+        </button>
+        <div className="space-y-4 animate-fade-in-up">
+          <div className="rounded-3xl bg-card p-6 text-center shadow-card">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+              <XCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <h2 className="mt-4 text-lg font-bold text-foreground">Booking Cancelled</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{booking.service.name}</p>
+            {booking.cancellationReason && (
+              <p className="mt-3 rounded-xl bg-secondary px-3 py-2 text-xs text-muted-foreground">
+                Reason: {booking.cancellationReason}
+              </p>
+            )}
+            {(booking.cancellationFee ?? 0) > 0 && (
+              <p className="mt-2 text-xs text-destructive font-medium">
+                Cancellation fee: ₹{booking.cancellationFee}
+              </p>
+            )}
+            {booking.status === "refunded" && (
+              <div className="mt-3 rounded-xl bg-success/10 border border-success/20 px-3 py-2.5 text-xs text-success font-medium">
+                Your payment will be refunded within 5–7 business days.
+              </div>
+            )}
+            <button
+              onClick={() => navigate({ name: "home" })}
+              className="mt-5 w-full rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Searching screen
   if (booking.status === "searching") {
     const searchingElapsedMs = now - booking.createdAt.getTime();
     const noProviderYet = searchingElapsedMs > NO_PROVIDER_TIMEOUT_MS;
@@ -107,7 +152,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
             onClick={() => {
               if (window.confirm("Cancel this booking?")) {
                 cancelBooking(booking.id);
-                navigate({ name: "bookings" });
               }
             }}
             className="w-full rounded-2xl border border-destructive/30 bg-card py-3 text-sm font-bold text-destructive shadow-soft"
@@ -119,7 +163,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
     );
   }
 
-  // Graceful fallback professional so the page never goes blank mid-service
   const professional = booking.professional ?? {
     id: "unknown",
     name: "Your Professional",
@@ -131,9 +174,9 @@ export const LiveStatus = ({ bookingId }: Props) => {
 
   const arrived = booking.status === "in-progress" || !!booking.arrivedAt;
   const completed = booking.status === "completed";
-  // Show OTP input as soon as booking is confirmed — partner arrival is a demo simulation
   const awaitingOtp = booking.status === "confirmed";
   const isCustomer = role === "customer";
+  const isInstant = booking.type === "instant";
 
   const submitOtp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +192,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
     setOtpInput("");
   };
 
-  // ETA timer countdown — compressed to match AppContext arrival sim (8s per minute)
+  // ETA timer countdown (instant bookings only)
   const etaMinutes = parseInt(professional.eta) || 8;
   const etaTotalMs = Math.max(Math.min(etaMinutes, 1) * 1000 * 8, 8000);
   const startedMs = booking.confirmedAt?.getTime() ?? booking.createdAt.getTime();
@@ -162,7 +205,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
     ? 100
     : Math.min(100, Math.round((elapsedMs / etaTotalMs) * 100));
 
-  // Cancellation fee logic
   const cancelFee =
     booking.status === "in-progress" || arrived
       ? cancellationPolicy.withinArrivalFee
@@ -175,7 +217,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
       )
     ) {
       cancelBooking(booking.id);
-      navigate({ name: "bookings" });
+      // Don't navigate — reactive state will transition to the cancelled screen above
     }
   };
 
@@ -191,13 +233,11 @@ export const LiveStatus = ({ bookingId }: Props) => {
       </button>
 
       <div className="space-y-4 animate-fade-in-up">
-        {/* Live tracking map */}
-        {!completed && (
+        {/* Live tracking map — instant bookings only */}
+        {!completed && isInstant && (
           <div className="overflow-hidden rounded-3xl bg-card shadow-card">
             <div className="relative h-44 sm:h-52 bg-gradient-to-br from-primary/20 via-secondary to-accent/20">
-              {/* fake map grid */}
               <div className="absolute inset-0 bg-[linear-gradient(hsl(var(--border))_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border))_1px,transparent_1px)] bg-[size:32px_32px] opacity-50" />
-              {/* route line */}
               <svg className="absolute inset-0 h-full w-full" viewBox="0 0 200 100" preserveAspectRatio="none">
                 <path
                   d="M 20 80 Q 60 30 120 50 T 180 20"
@@ -208,14 +248,12 @@ export const LiveStatus = ({ bookingId }: Props) => {
                   className="animate-pulse"
                 />
               </svg>
-              {/* destination pin */}
               <div className="absolute right-6 top-4 flex flex-col items-center">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-elevated">
                   <MapPin className="h-4 w-4" />
                 </div>
                 <span className="mt-1 rounded bg-card px-1.5 py-0.5 text-[9px] font-semibold shadow-soft">You</span>
               </div>
-              {/* partner pin moving */}
               <div
                 className="absolute bottom-6 transition-all duration-1000 ease-linear"
                 style={{ left: `${10 + progressPct * 0.7}%` }}
@@ -254,6 +292,65 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </div>
         )}
 
+        {/* Scheduled booking details card — scheduled bookings only */}
+        {!isInstant && !completed && (
+          <div className="rounded-3xl bg-card p-5 shadow-card">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Scheduled Booking</p>
+                <h2 className="text-sm font-bold text-foreground">{booking.service.name}</h2>
+              </div>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${
+                booking.status === "in-progress"
+                  ? "bg-success/15 text-success"
+                  : booking.status === "confirmed"
+                    ? "bg-primary/15 text-primary"
+                    : "bg-secondary text-muted-foreground"
+              }`}>
+                {booking.status === "in-progress" ? "In Progress" : booking.status === "confirmed" ? "Confirmed" : booking.status}
+              </span>
+            </div>
+            <div className="mt-4 space-y-2 text-sm">
+              {booking.scheduledAt && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Date</span>
+                    <span className="font-semibold text-foreground">
+                      {booking.scheduledAt.toLocaleDateString("en", { dateStyle: "medium" })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Time</span>
+                    <span className="font-semibold text-foreground">
+                      {booking.scheduledAt.toLocaleTimeString("en", { timeStyle: "short" })}
+                    </span>
+                  </div>
+                </>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Duration</span>
+                <span className="flex items-center gap-1 font-semibold text-foreground">
+                  <Clock className="h-3 w-3" /> {booking.service.duration}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
+                <span className="text-muted-foreground">Address</span>
+                <span className="flex items-start gap-1 text-right font-semibold text-foreground">
+                  <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                  <span className="line-clamp-2">{booking.address}</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-bold text-primary">₹{booking.service.price}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Status header */}
         <div className="rounded-3xl bg-card p-5 shadow-card">
           <div className="flex items-center gap-3">
@@ -265,7 +362,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
                 {completed ? "Service completed" : arrived ? "Partner has arrived" : "Booking confirmed"}
               </h2>
               <p className="text-xs text-muted-foreground">
-                {booking.type === "instant"
+                {isInstant
                   ? arrived
                     ? "Your professional is on-site"
                     : `Arriving in ${professional.eta}`
@@ -345,30 +442,30 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </button>
 
           {!completed && (
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <button className="flex flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 py-2.5 text-[11px] font-semibold text-primary transition-smooth hover:bg-primary/15">
-              <Phone className="h-4 w-4" /> Call
-            </button>
-            <button
-              onClick={() => navigate({ name: "chat", bookingId: booking.id })}
-              className="flex flex-col items-center justify-center gap-1 rounded-xl bg-secondary py-2.5 text-[11px] font-semibold text-foreground transition-smooth hover:bg-muted"
-            >
-              <MessageCircle className="h-4 w-4" /> Chat
-            </button>
-            <button
-              onClick={() => arrived && navigate({ name: "live-cam", bookingId: booking.id })}
-              disabled={!arrived}
-              className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-[11px] font-semibold transition-smooth ${
-                arrived
-                  ? "bg-accent/15 text-accent hover:bg-accent/20"
-                  : "bg-muted text-muted-foreground opacity-60"
-              }`}
-            >
-              <Video className="h-4 w-4" /> {arrived ? "Live Cam" : "Cam soon"}
-            </button>
-          </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <button className="flex flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 py-2.5 text-[11px] font-semibold text-primary transition-smooth hover:bg-primary/15">
+                <Phone className="h-4 w-4" /> Call
+              </button>
+              <button
+                onClick={() => navigate({ name: "chat", bookingId: booking.id })}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl bg-secondary py-2.5 text-[11px] font-semibold text-foreground transition-smooth hover:bg-muted"
+              >
+                <MessageCircle className="h-4 w-4" /> Chat
+              </button>
+              <button
+                onClick={() => arrived && navigate({ name: "live-cam", bookingId: booking.id })}
+                disabled={!arrived}
+                className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-[11px] font-semibold transition-smooth ${
+                  arrived
+                    ? "bg-accent/15 text-accent hover:bg-accent/20"
+                    : "bg-muted text-muted-foreground opacity-60"
+                }`}
+              >
+                <Video className="h-4 w-4" /> {arrived ? "Live Cam" : "Cam soon"}
+              </button>
+            </div>
           )}
-          {!completed && !arrived && (
+          {!completed && !arrived && isInstant && (
             <p className="mt-2 text-center text-[10px] text-muted-foreground">
               Live cam unlocks once partner arrives
             </p>
@@ -393,7 +490,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </div>
         )}
 
-        {/* Preferences applied to this booking */}
+        {/* Preferences */}
         {booking.preferences && booking.preferences.schedule && booking.preferences.schedule.length > 0 && (
           <div className="rounded-3xl bg-card p-5 shadow-soft">
             <div className="flex items-center gap-2">
@@ -418,43 +515,45 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </div>
         )}
 
-        {/* Booking details */}
-        <div className="rounded-3xl bg-card p-5 shadow-soft">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking details</p>
-          <div className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Service</span>
-              <span className="font-semibold text-foreground">{booking.service.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Duration</span>
-              <span className="flex items-center gap-1 font-semibold text-foreground">
-                <Clock className="h-3 w-3" /> {booking.service.duration}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total</span>
-              <span className="font-bold text-primary">₹{booking.service.price}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Payment</span>
-              <span className={`font-semibold ${booking.paymentStatus === "paid" ? "text-success" : "text-muted-foreground"}`}>
-                {booking.paymentStatus === "paid"
-                  ? "Paid"
-                  : booking.paymentStatus === "refunded"
-                    ? "Refunded"
-                    : "Due after service"}
-              </span>
-            </div>
-            <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
-              <span className="text-muted-foreground">Address</span>
-              <span className="flex items-center gap-1 text-right font-semibold text-foreground">
-                <MapPin className="h-3 w-3 text-primary" />
-                {booking.address}
-              </span>
+        {/* Booking details — shown for instant or completed scheduled */}
+        {(isInstant || completed) && (
+          <div className="rounded-3xl bg-card p-5 shadow-soft">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Booking details</p>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Service</span>
+                <span className="font-semibold text-foreground">{booking.service.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Duration</span>
+                <span className="flex items-center gap-1 font-semibold text-foreground">
+                  <Clock className="h-3 w-3" /> {booking.service.duration}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-bold text-primary">₹{booking.service.price}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Payment</span>
+                <span className={`font-semibold ${booking.paymentStatus === "paid" ? "text-success" : "text-muted-foreground"}`}>
+                  {booking.paymentStatus === "paid"
+                    ? "Paid"
+                    : booking.paymentStatus === "refunded"
+                      ? "Refunded"
+                      : "Due after service"}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3 border-t border-border pt-2">
+                <span className="text-muted-foreground">Address</span>
+                <span className="flex items-center gap-1 text-right font-semibold text-foreground">
+                  <MapPin className="h-3 w-3 text-primary" />
+                  {booking.address}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Cancellation policy & actions */}
         {!completed && (

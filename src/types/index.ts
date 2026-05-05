@@ -1,4 +1,4 @@
-export type Role = "customer" | "partner";
+export type Role = "customer" | "partner" | "admin";
 
 export type BookingType = "instant" | "scheduled";
 
@@ -95,6 +95,7 @@ export interface Booking {
   completedAt?: Date;
   cancelledAt?: Date;
   cancellationFee?: number;
+  cancellationReason?: string;
   startOtp?: string;
   paymentStatus?: "pending" | "paid" | "failed" | "refunded";
   paymentMethod?: string;
