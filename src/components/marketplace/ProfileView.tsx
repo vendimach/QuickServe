@@ -103,7 +103,7 @@ export const ProfileView = () => {
   ];
   // Partners don't need customer-only rows: payments & saved addresses.
   const rows: Row[] = role === "partner"
-    ? allRows.filter((r) => r.label !== "Payment Methods" && r.label !== "Saved Addresses")
+    ? allRows.filter((r) => r.label !== "Payment Methods")
     : allRows;
 
   const supportRows = [

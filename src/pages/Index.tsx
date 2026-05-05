@@ -23,6 +23,7 @@ import { PartnerOtpView } from "@/components/marketplace/PartnerOtpView";
 import { BookingSummary } from "@/components/marketplace/BookingSummary";
 import { PartnerEarningsView } from "@/components/marketplace/PartnerEarningsView";
 import { PartnerJobView } from "@/components/marketplace/PartnerJobView";
+import { PartnerJobCompleteView } from "@/components/marketplace/PartnerJobCompleteView";
 import { categories, services } from "@/data/services";
 
 const Router = () => {
@@ -120,6 +121,14 @@ const Router = () => {
     return (
       <AppShell title="Booking Summary" subtitle="Timings, payment & rating">
         <BookingSummary bookingId={view.bookingId} />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "partner-job-complete") {
+    return (
+      <AppShell title="Job Complete" subtitle="Service summary & earnings" showHeader={false}>
+        <PartnerJobCompleteView bookingId={view.bookingId} />
       </AppShell>
     );
   }

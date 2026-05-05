@@ -9,6 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Delhi", "Jammu & Kashmir", "Ladakh", "Puducherry", "Chandigarh",
+  "Dadra & Nagar Haveli and Daman & Diu", "Lakshadweep",
+  "Andaman & Nicobar Islands",
+];
+
 export const AddressesView = () => {
   const { navigate } = useApp();
   const { addresses, addAddress, deleteAddress, setDefaultAddress, loadingAddresses } = useUserData();
@@ -114,7 +125,7 @@ export const AddressesView = () => {
                 }
               }
             } catch {
-              // silently ignore — address list will refresh
+              // silently ignore
             } finally {
               setAdding(false);
               setEditing(null);
@@ -133,7 +144,7 @@ interface FormProps {
 }
 
 const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
-  const { updateAddress } = useUserData();
+  const { updateAddress, setDefaultAddress } = useUserData();
   const [label, setLabel] = useState(existing?.label ?? "Home");
   const [line1, setLine1] = useState(existing?.line1 ?? "");
   const [city, setCity] = useState(existing?.city ?? "");
@@ -163,7 +174,7 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
           if (data?.state) setState(data.state);
           if (data?.pincode) setPincode(data.pincode);
         } catch {
-          // reverse-geocode failed — lat/lng are still set, user can type address
+          // lat/lng still captured; user can fill address manually
         } finally {
           setLocating(false);
         }
@@ -179,7 +190,12 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
     setSaving(true);
     try {
       if (existing) {
-        await updateAddress(existing.id, { label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });
+        await updateAddress(existing.id, {
+          label, line1, city, state, pincode,
+          latitude: lat ?? undefined,
+          longitude: lng ?? undefined,
+        });
+        if (makeDefault) await setDefaultAddress(existing.id);
         onSaved({ label, line1, city, state, pincode, is_default: makeDefault });
       } else {
         onSaved({ label, line1, city, state, pincode, latitude: lat ?? undefined, longitude: lng ?? undefined, is_default: makeDefault });
@@ -200,25 +216,34 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
       </div>
       <div>
         <Label>Label</Label>
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home / Work" />
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Home / Work / Other" />
       </div>
       <div>
-        <Label>Address</Label>
-        <Input value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="House, street, area" />
+        <Label>Address line</Label>
+        <Input value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="House no., street, area" required />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label>City</Label>
-          <Input value={city ?? ""} onChange={(e) => setCity(e.target.value)} />
+          <Input value={city ?? ""} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Mumbai" />
         </div>
         <div>
           <Label>Pincode</Label>
-          <Input value={pincode ?? ""} onChange={(e) => setPincode(e.target.value)} inputMode="numeric" maxLength={6} />
+          <Input value={pincode ?? ""} onChange={(e) => setPincode(e.target.value)} inputMode="numeric" maxLength={6} placeholder="6 digits" />
         </div>
       </div>
       <div>
         <Label>State</Label>
-        <Input value={state ?? ""} onChange={(e) => setState(e.target.value)} />
+        <select
+          value={state ?? ""}
+          onChange={(e) => setState(e.target.value)}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <option value="">Select state</option>
+          {INDIAN_STATES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
       </div>
       <label className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 cursor-pointer">
         <Checkbox
@@ -234,8 +259,8 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
       )}
       <div className="flex gap-2">
         <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" className="flex-1" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+        <Button type="submit" className="flex-1" disabled={saving || !line1.trim()}>
+          {saving ? "Saving…" : existing ? "Update" : "Save"}
         </Button>
       </div>
     </form>

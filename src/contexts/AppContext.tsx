@@ -30,7 +30,8 @@ export type View =
   | { name: "partner-otp"; bookingId: string }
   | { name: "booking-summary"; bookingId: string }
   | { name: "partner-earnings" }
-  | { name: "partner-job"; bookingId: string };
+  | { name: "partner-job"; bookingId: string }
+  | { name: "partner-job-complete"; bookingId: string };
 
 // View <-> URL mapping
 export const viewToPath = (v: View): string => {
@@ -58,6 +59,7 @@ export const viewToPath = (v: View): string => {
     case "booking-summary": return `/summary/${v.bookingId}`;
     case "partner-earnings": return "/partner/earnings";
     case "partner-job": return `/partner/job/${v.bookingId}`;
+    case "partner-job-complete": return `/partner/job/${v.bookingId}/complete`;
   }
 };
 
@@ -77,6 +79,7 @@ export const pathToView = (pathname: string, role: Role): View => {
   if (a === "profile") return { name: "profile" };
   if (a === "notifications") return { name: "notifications" };
   if (a === "partner" && b === "earnings") return { name: "partner-earnings" };
+  if (a === "partner" && b === "job" && segs[2] && segs[3] === "complete") return { name: "partner-job-complete", bookingId: segs[2] };
   if (a === "partner" && b === "job" && segs[2]) return { name: "partner-job", bookingId: segs[2] };
   if (a === "partner") return { name: "partner-dashboard" };
   if (a === "rate" && b) return { name: "rate-booking", bookingId: b };
