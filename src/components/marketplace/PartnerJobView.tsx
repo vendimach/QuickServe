@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft, MapPin, Phone, MessageCircle, Calendar, Zap, Clock,
   User as UserIcon, AlertTriangle, XCircle, CheckCircle2, Timer, Loader2,
+  KeyRound, Copy,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -210,23 +211,33 @@ export const PartnerJobView = ({ bookingId }: Props) => {
         </div>
       </div>
 
-      {/* OTP waiting card — shown only when NOT yet in-progress */}
+      {/* OTP display — shown until customer verifies (status moves to in-progress) */}
       {!isInProgress && !isCompleted && (
         <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-card">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
-              <Clock className="h-4 w-4" />
+              <KeyRound className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-bold text-foreground">Waiting for OTP verification</p>
+              <p className="text-sm font-bold text-foreground">Share this OTP with the customer</p>
               <p className="text-[11px] text-muted-foreground">
-                Ask the customer to enter the OTP on their screen to start the service
+                Customer enters it on their app to start the service & timer
               </p>
             </div>
           </div>
-          <div className="mt-3 rounded-xl bg-card px-4 py-3 text-center">
-            <p className="text-xs text-muted-foreground">The service timer starts once the customer verifies the OTP</p>
+          <div className="rounded-2xl bg-card py-5 text-center shadow-soft">
+            <p className="text-5xl font-bold tracking-[0.4em] tabular-nums text-foreground">
+              {realBooking?.startOtp ?? "----"}
+            </p>
           </div>
+          <button
+            onClick={async () => {
+              try { await navigator.clipboard.writeText(realBooking?.startOtp ?? ""); } catch { /* ignore */ }
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-card py-2.5 text-xs font-bold text-foreground shadow-soft border border-border"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copy OTP
+          </button>
         </div>
       )}
 
