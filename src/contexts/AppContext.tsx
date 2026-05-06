@@ -262,6 +262,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     let mounted = true;
     setLoadingBookings(true);
 
+    // Always start fresh on (re)load to prevent ghost rows from a previous
+    // session/role from leaking into the new state. The fetch below replaces,
+    // never merges — but clearing first guarantees that if the fetch fails
+    // or is slow, the UI doesn't briefly render stale data.
+    setBookings([]);
+    setAvailableBookings([]);
+
     // Own bookings (created by or assigned to this user)
     supabase
       .from("bookings")
@@ -275,7 +282,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setBookings((data as BookingRow[]).map(rowToBooking));
       });
 
-    // Available searching bookings for partners
+    // Available searching bookings for partners.
+    // Strict server-side filter: must be 'searching', no partner assigned,
+    // and not the partner's own booking. Anything cancelled / completed /
+    // confirmed / accepted-by-someone-else has a different status or a
+    // partner_id, so it can never come back from this query.
     if (role === "partner") {
       supabase
         .from("bookings")
@@ -286,7 +297,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .order("created_at", { ascending: false })
         .then(({ data }) => {
           if (!mounted || !data) return;
-          setAvailableBookings((data as BookingRow[]).map(rowToBooking));
+          const rows = data as BookingRow[];
+          const mapped = rows.map(rowToBooking);
+          // Drop scheduled bookings whose scheduledAt has already passed —
+          // they're stale even if the DB still has them as 'searching'.
+          const now = Date.now();
+          const fresh = mapped.filter((b) => {
+            if (b.type === "scheduled" && b.scheduledAt && b.scheduledAt.getTime() < now) {
+              return false;
+            }
+            return true;
+          });
+          console.log(
+            `[incoming-requests] initial fetch: ${rows.length} raw row(s) →` +
+            ` ${fresh.length} active after stale filter`,
+          );
+          // REPLACE state — never merge with whatever was there before.
+          setAvailableBookings(fresh);
         });
     }
 
@@ -299,8 +326,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           if (payload.eventType === "INSERT") {
             const row = payload.new as BookingRow;
             const b = rowToBooking(row);
-            // Route to availableBookings if it's a searching booking from another user (partner sees it)
-            if (role === "partner" && b.status === "searching" && row.user_id !== user.id && !row.partner_id) {
+            // Route to availableBookings only if it's a fresh searching booking
+            // from another user with no partner assigned. Same guards as the
+            // initial fetch.
+            const isFreshScheduled =
+              b.type !== "scheduled" || !b.scheduledAt || b.scheduledAt.getTime() >= Date.now();
+            if (
+              role === "partner" &&
+              b.status === "searching" &&
+              row.user_id !== user.id &&
+              !row.partner_id &&
+              isFreshScheduled
+            ) {
               setAvailableBookings((prev) => prev.find((x) => x.id === b.id) ? prev : [b, ...prev]);
             } else {
               setBookings((prev) => prev.find((x) => x.id === b.id) ? prev : [b, ...prev]);
@@ -308,20 +345,37 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           } else if (payload.eventType === "UPDATE") {
             const row = payload.new as BookingRow;
             const b = rowToBooking(row);
-            // Remove from availableBookings the moment the row leaves the
-            // 'searching' state (cancelled, refunded, accepted, …). This is
-            // what drives instant removal of cancelled requests on the
-            // partner dashboard with no refresh.
-            if (b.status !== "searching" || row.partner_id) {
+            // Any transition out of 'searching' (cancelled, refunded,
+            // confirmed, in-progress, completed, awaiting-customer-confirm)
+            // OR any partner_id assignment immediately removes the row from
+            // the partner's incoming list — no refresh needed.
+            const stillOpen = b.status === "searching" && !row.partner_id;
+            if (!stillOpen) {
               setAvailableBookings((prev) => {
                 const next = prev.filter((x) => x.id !== b.id);
                 if (next.length !== prev.length) {
-                  console.log(`[realtime] removing booking ${b.id} from incoming requests (status=${b.status}, partner_id=${row.partner_id ?? "null"})`);
+                  console.log(
+                    `[realtime] removing booking ${b.id} from incoming requests` +
+                    ` (status=${b.status}, partner_id=${row.partner_id ?? "null"})`,
+                  );
                 }
                 return next;
               });
-            } else if (role === "partner" && b.status === "searching" && !row.partner_id && row.user_id !== user.id) {
-              setAvailableBookings((prev) => prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x));
+            } else if (role === "partner" && row.user_id !== user.id) {
+              // Still searching → either update an existing entry OR add a
+              // newly-eligible row (e.g. partner_id was cleared by the
+              // backend). Honors the same scheduled freshness rule.
+              const isFreshScheduled =
+                b.type !== "scheduled" || !b.scheduledAt || b.scheduledAt.getTime() >= Date.now();
+              if (isFreshScheduled) {
+                setAvailableBookings((prev) => {
+                  const exists = prev.find((x) => x.id === b.id);
+                  if (exists) {
+                    return prev.map((x) => x.id === b.id ? { ...b, acceptedBy: x.acceptedBy } : x);
+                  }
+                  return [b, ...prev];
+                });
+              }
             }
             // Update in own bookings if user is involved.
             // Preserve the local professional when the DB row doesn't have one — this

@@ -88,49 +88,64 @@ export const PartnerDashboard = () => {
   }, [dbSchedule]);
 
   // Pending requests = anything still in 'searching' with no partner assigned.
-  // Defensive guard against stale rows after a realtime reconnect.
-  const pendingRequests = availableBookings.filter(
-    (b) => b.status === "searching" && !b.partnerUserId,
-  );
+  // Defensive guard against stale rows after a realtime reconnect — even if
+  // the upstream context briefly holds a stale row, it is hidden here.
+  const pendingRequests = availableBookings.filter((b) => {
+    if (b.status !== "searching") return false;
+    if (b.partnerUserId) return false;
+    // Reserved bookings whose scheduled time has passed are no longer
+    // actionable — drop them so they cannot ghost back into the UI on refresh.
+    if (b.type === "scheduled" && b.scheduledAt && b.scheduledAt.getTime() < Date.now()) {
+      return false;
+    }
+    return true;
+  });
 
-  // Distance filter shared by both instant and reserved.
-  // Reserved (scheduled) bookings MUST evaluate against the partner's saved
-  // HOME location — never live GPS — per product spec, and run independently
-  // of the instant flow so they show up even when the partner is not live.
+  // Distance filter — shared signature, but each caller must pass the
+  // correct reference location for its booking type. There is NO implicit
+  // fallback inside this helper: callers decide.
   const withinRadius = (b: typeof pendingRequests[number], radiusKm: number, refLat: number | null, refLng: number | null): boolean => {
     if (!b.userLat || !b.userLng) {
-      console.warn(`[distance] booking ${b.id} (${b.type}) has no user coordinates — showing by default`);
-      return true;
+      console.warn(`[distance] booking ${b.id} (${b.type}) has no user coordinates — hiding`);
+      return false;
     }
     if (refLat == null || refLng == null) {
-      console.warn(`[distance] booking ${b.id} (${b.type}): no partner reference location yet — showing by default`);
-      return true;
+      console.warn(`[distance] booking ${b.id} (${b.type}): no partner reference location yet — hiding`);
+      return false;
     }
     const dist = haversineKm(refLat, refLng, b.userLat, b.userLng);
     const pass = dist <= radiusKm;
     console.log(
-      `[distance] booking ${b.id} (${b.type}):` +
-      ` user=(${b.userLat.toFixed(4)}, ${b.userLng.toFixed(4)})` +
+      `[distance] booking ${b.id} type=${b.type}` +
+      ` service_addr=(${b.userLat.toFixed(4)}, ${b.userLng.toFixed(4)})` +
       ` partner_ref=(${refLat.toFixed(4)}, ${refLng.toFixed(4)})` +
       ` dist=${dist.toFixed(2)} km  max=${radiusKm} km  → ${pass ? "SHOW" : "HIDE"}`,
     );
     return pass;
   };
 
-  // Instant: live GPS, ≤ 10 km
+  // Instant: partner's CURRENT (live GPS) location, ≤ 10 km.
+  // Never references homeLat/homeLng.
   const instantRequests = pendingRequests.filter(
     (b) => b.type === "instant" && withinRadius(b, INSTANT_RADIUS_KM, partnerLat, partnerLng),
   );
 
-  // Reserved (scheduled): partner's DEFAULT home location, ≤ 30 km.
-  // Falls back to live GPS only if the partner has not yet set a home area
-  // (so a brand-new partner still sees something while we wait for them to
-  // configure their default).
-  const reservedRefLat = homeLat ?? partnerLat;
-  const reservedRefLng = homeLng ?? partnerLng;
-  const reservedRequests = pendingRequests.filter(
-    (b) => b.type === "scheduled" && withinRadius(b, SCHEDULED_RADIUS_KM, reservedRefLat, reservedRefLng),
+  // Reserved (scheduled): partner's DEFAULT (saved home) location, ≤ 30 km.
+  // STRICT: never falls back to live GPS — if the partner has not set a home
+  // area, no reserved requests are shown (the empty state prompts them to
+  // configure it). Mixing in current GPS would silently break the spec.
+  const reservedRefLat = homeLat;
+  const reservedRefLng = homeLng;
+  const reservedHomeSet = reservedRefLat != null && reservedRefLng != null;
+  console.log(
+    `[partner-location] current=(${partnerLat?.toFixed(4) ?? "null"}, ${partnerLng?.toFixed(4) ?? "null"})` +
+    ` default=(${homeLat?.toFixed(4) ?? "null"}, ${homeLng?.toFixed(4) ?? "null"})`,
   );
+  const reservedRequests = reservedHomeSet
+    ? pendingRequests.filter(
+        (b) => b.type === "scheduled" && withinRadius(b, SCHEDULED_RADIUS_KM, reservedRefLat, reservedRefLng),
+      )
+    : [];
 
   // Partner's active jobs (confirmed / in-progress)
   const activeJobs = bookings.filter(
@@ -542,6 +557,14 @@ export const PartnerDashboard = () => {
             <p className="text-sm font-semibold text-foreground">Listings are off</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Toggle "Show in today's listings" above to receive reserved bookings
+            </p>
+          </div>
+        ) : !reservedHomeSet ? (
+          <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
+            <Home className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm font-semibold text-foreground">Set your home area</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Reserved bookings are matched against your saved home area, not your current location.
             </p>
           </div>
         ) : reservedRequests.length === 0 ? (
