@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowLeft, MapPin, Phone, MessageCircle, Calendar, Zap, Clock,
-  User as UserIcon, AlertTriangle, XCircle, CheckCircle2, Timer, Loader2,
+  User as UserIcon, AlertTriangle, XCircle, CheckCircle2, Loader2,
   KeyRound, Copy,
 } from "lucide-react";
 
@@ -9,24 +9,9 @@ import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { ServiceTimer, PartnerExtensionPanel } from "./ServiceTimer";
 
 interface Props { bookingId: string; }
-
-function useElapsed(startedAt: Date | undefined): string {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  if (!startedAt) return "00:00";
-  const ms = Math.max(0, now - startedAt.getTime());
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  const s = Math.floor((ms % 60_000) / 1_000);
-  return h > 0
-    ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-    : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
 
 export const PartnerJobView = ({ bookingId }: Props) => {
   const { bookings, navigate, cancelBooking, completeBooking } = useApp();
@@ -80,8 +65,6 @@ export const PartnerJobView = ({ bookingId }: Props) => {
     } catch { /* ignore */ }
   }
 
-  const elapsed = useElapsed(realBooking?.startedAt);
-
   if (!job) {
     return (
       <div className="px-5 pb-6">
@@ -134,14 +117,28 @@ export const PartnerJobView = ({ bookingId }: Props) => {
     if (!realBooking) return;
     setCompleting(true);
     try {
+      // Compute the prorated amount the same way completeBooking does, but
+      // earlier — so we can record matching earnings. completeBooking will
+      // also persist final_amount to the row; using the same formula here
+      // keeps partner earnings in sync with what the customer is billed.
+      const startedAt = realBooking.startedAt;
+      const planned = realBooking.plannedDurationMinutes ?? 0;
+      const extension = realBooking.extensionMinutes ?? 0;
+      const elapsedMin = startedAt
+        ? Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 60_000))
+        : 0;
+      const baseRatio = planned > 0 ? Math.min(1, elapsedMin / planned) : 1;
+      const basePortion = Math.round(realBooking.service.price * baseRatio);
+      const extPortion = realBooking.extensionCharges ?? 0;
+      const earnings = Math.min(realBooking.service.price + extension * 1000, basePortion + extPortion);
+
       completeBooking(realBooking.id);
-      // Record earnings
       if (user) {
         await supabase.from("partner_earnings").insert({
           partner_id: user.id,
           booking_id: realBooking.id,
           service_name: realBooking.service.name,
-          amount: realBooking.service.price,
+          amount: earnings,
           customer_name: null,
           earned_at: new Date().toISOString(),
         }).then(() => {});
@@ -280,20 +277,12 @@ export const PartnerJobView = ({ bookingId }: Props) => {
         </div>
       )}
 
-      {/* Live service timer — shown only when in-progress */}
-      {isInProgress && (
-        <div className="rounded-3xl gradient-primary p-5 shadow-elevated animate-fade-in-up">
-          <div className="flex items-center gap-2 text-primary-foreground/80">
-            <Timer className="h-4 w-4" />
-            <p className="text-xs font-bold uppercase tracking-wider">Service in progress</p>
-          </div>
-          <p className="mt-3 text-center text-5xl font-bold tabular-nums tracking-tight text-primary-foreground">
-            {elapsed}
-          </p>
-          <p className="mt-1.5 text-center text-xs text-primary-foreground/70">
-            Estimated: {job.serviceDuration}
-          </p>
-        </div>
+      {/* Live service timer + extension panel — only when in-progress */}
+      {isInProgress && realBooking && (
+        <>
+          <ServiceTimer booking={realBooking} />
+          <PartnerExtensionPanel booking={realBooking} />
+        </>
       )}
 
       {/* Communication buttons */}

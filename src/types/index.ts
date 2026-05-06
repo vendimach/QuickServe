@@ -69,7 +69,10 @@ export interface Professional {
   name: string;
   rating: number;
   jobs: number;
+  /** Two-letter initials shown when no photo is available. */
   avatar: string;
+  /** Optional uploaded photo (data URI or remote URL). */
+  avatarUrl?: string;
   eta: string;
   categoryIds?: string[];
   availableNow?: boolean;
@@ -78,6 +81,8 @@ export interface Professional {
   schedule?: ScheduleSlot[];
   bio?: string;
 }
+
+export type ExtensionStatus = "none" | "pending" | "accepted" | "declined";
 
 export interface Booking {
   id: string;
@@ -108,6 +113,31 @@ export interface Booking {
   partnerLat?: number;
   partnerLng?: number;
   partnerUserId?: string;
+
+  /** When set, this booking is targeted at a specific favorite partner only. */
+  requestedPartnerId?: string;
+  /** Optional note from the customer when sending a personal request. */
+  personalMessage?: string;
+
+  // ── Timer + extension fields ───────────────────────────────────────────
+  /** Original duration of the booked service in minutes, snapshotted at start. */
+  plannedDurationMinutes?: number;
+  /** When the timer is expected to auto-complete (start + plannedDuration + extensionMinutes). */
+  plannedEndTime?: Date;
+  /** Filled in at completion time; how long the partner actually worked. */
+  actualDurationMinutes?: number;
+  /** Final billed amount (base + extension). null until completion. */
+  finalAmount?: number;
+  /** Cumulative extra minutes added through accepted extensions. */
+  extensionMinutes?: number;
+  /** Cumulative extension charges to date (added to finalAmount). */
+  extensionCharges?: number;
+  /** Pending extension request — minutes the user is asking for. */
+  extensionRequestMinutes?: number;
+  /** Pending extension request — optional message from the user. */
+  extensionRequestMessage?: string;
+  /** Lifecycle of the latest extension request. */
+  extensionStatus?: ExtensionStatus;
 }
 
 export interface PartnerRequest {

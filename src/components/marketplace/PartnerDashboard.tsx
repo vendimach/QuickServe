@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import {
   MapPin, Star, TrendingUp, Wallet, CheckCircle2, X, Zap, CalendarClock, Briefcase, Eye,
-  CalendarDays, Plus, Trash2, ChevronRight, Loader2, Home,
+  CalendarDays, Plus, Trash2, ChevronRight, Loader2, Home, Heart, MessageSquare, Sparkles,
 } from "lucide-react";
 import type { DayOfWeek, Professional } from "@/types";
 import { useApp } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { usePartnerData } from "@/contexts/PartnerDataContext";
+import { useUserData } from "@/contexts/UserDataContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useBadges } from "@/contexts/BadgeContext";
 import { cn } from "@/lib/utils";
-import { AddressSelector, type GeoAddress } from "./AddressSelector";
+import { TierProgressCard, BadgeChips } from "./TrustBadges";
 
 const DAYS: DayOfWeek[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const INSTANT_RADIUS_KM = 10;
@@ -40,21 +41,30 @@ export const PartnerDashboard = () => {
     earningsTotal,
     jobsCompletedTotal,
     averageRating,
+    trustStats,
   } = usePartnerData();
+  const { badgesForPartner } = useBadges();
   const { push } = useNotifications();
+
+  const { defaultAddress } = useUserData();
 
   const [partnerLat, setPartnerLat] = useState<number | null>(null);
   const [partnerLng, setPartnerLng] = useState<number | null>(null);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [declining, setDeclining] = useState<string | null>(null);
+  // IDs the partner has declined locally — we hide them from the list so the
+  // card doesn't re-render after the click. The booking stays in 'searching'
+  // state in the DB so other partners can still pick it up.
+  const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => new Set());
   const [schedule, setSchedule] = useState<{ days: DayOfWeek[]; start: string; end: string }[]>([]);
   const [savingSchedule, setSavingSchedule] = useState(false);
-  const [homeGeo, setHomeGeo] = useState<GeoAddress | null>(null);
-  const [savingHome, setSavingHome] = useState(false);
-  const [showHomeSelector, setShowHomeSelector] = useState(false);
 
-  // Partner's saved home location (from profiles) — used for scheduled booking radius
-  const homeLat = profile?.home_lat ?? null;
-  const homeLng = profile?.home_lng ?? null;
+  // Partner's saved-address default doubles as their reserved-booking home.
+  // This replaces the standalone "Home area" UI: there's a single source of
+  // truth for the partner's home location now (the address book), and
+  // reserved bookings match against its coordinates.
+  const homeLat = defaultAddress?.latitude ?? null;
+  const homeLng = defaultAddress?.longitude ?? null;
 
   // Get partner's live GPS for instant-booking radius
   useEffect(() => {
@@ -71,10 +81,11 @@ export const PartnerDashboard = () => {
     );
   }, []);
 
-  // Log home area whenever it changes
+  // Log default-address coordinates whenever they change so distance debugging
+  // is symmetrical with the live-GPS log above.
   useEffect(() => {
     if (homeLat && homeLng) {
-      console.log(`[partner-location] home area: ${homeLat.toFixed(6)}, ${homeLng.toFixed(6)}`);
+      console.log(`[partner-location] default address: ${homeLat.toFixed(6)}, ${homeLng.toFixed(6)}`);
     }
   }, [homeLat, homeLng]);
 
@@ -98,6 +109,9 @@ export const PartnerDashboard = () => {
     if (b.type === "scheduled" && b.scheduledAt && b.scheduledAt.getTime() < Date.now()) {
       return false;
     }
+    // Locally-declined rows stay searchable for other partners but are
+    // hidden from this partner's dashboard.
+    if (declinedIds.has(b.id)) return false;
     return true;
   });
 
@@ -124,10 +138,19 @@ export const PartnerDashboard = () => {
     return pass;
   };
 
+  // Personal requests targeted directly at THIS partner — bypass the
+  // distance/availability filters entirely, since the customer chose us.
+  const personalRequests = pendingRequests.filter(
+    (b) => b.requestedPartnerId === user?.id,
+  );
+
   // Instant: partner's CURRENT (live GPS) location, ≤ 10 km.
-  // Never references homeLat/homeLng.
+  // Personal-request rows are surfaced separately and excluded here.
   const instantRequests = pendingRequests.filter(
-    (b) => b.type === "instant" && withinRadius(b, INSTANT_RADIUS_KM, partnerLat, partnerLng),
+    (b) =>
+      b.type === "instant" &&
+      !b.requestedPartnerId &&
+      withinRadius(b, INSTANT_RADIUS_KM, partnerLat, partnerLng),
   );
 
   // Reserved (scheduled): partner's DEFAULT (saved home) location, ≤ 30 km.
@@ -143,7 +166,10 @@ export const PartnerDashboard = () => {
   );
   const reservedRequests = reservedHomeSet
     ? pendingRequests.filter(
-        (b) => b.type === "scheduled" && withinRadius(b, SCHEDULED_RADIUS_KM, reservedRefLat, reservedRefLng),
+        (b) =>
+          b.type === "scheduled" &&
+          !b.requestedPartnerId &&
+          withinRadius(b, SCHEDULED_RADIUS_KM, reservedRefLat, reservedRefLng),
       )
     : [];
 
@@ -154,7 +180,20 @@ export const PartnerDashboard = () => {
 
   const respond = async (id: string, action: "accept" | "decline") => {
     if (action === "decline") {
-      // Just remove from the local list (the booking stays searching in DB for other partners)
+      // Optimistic local hide — the row stays 'searching' in the DB so other
+      // partners can still see and accept it. We use a brief "Declining…"
+      // state to confirm the click registered, then commit to declinedIds.
+      console.log("[partner/decline] click", { bookingId: id });
+      setDeclining(id);
+      // Tiny micro-delay so the spinner is perceivable and double-clicks
+      // can't double-fire the push notification.
+      await new Promise((r) => setTimeout(r, 120));
+      setDeclinedIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      setDeclining(null);
       push({ kind: "info", title: "Request declined" });
       return;
     }
@@ -167,9 +206,12 @@ export const PartnerDashboard = () => {
       const professional: Professional = {
         id: user.id,
         name: partnerName,
-        rating: averageRating ?? 5.0,
+        // 0 sentinels "no reviews yet" — UI renders dynamically from
+        // ratingForPro() so this number is never displayed to users.
+        rating: averageRating ?? 0,
         jobs: jobsCompletedTotal,
         avatar: partnerName.slice(0, 2).toUpperCase(),
+        avatarUrl: profile?.avatar_url ?? undefined,
         eta: "8 min",
       };
       const result = await partnerAcceptBooking(id, professional);
@@ -209,26 +251,40 @@ export const PartnerDashboard = () => {
     }
   };
 
-  const handleSaveHomeArea = async (geo: GeoAddress) => {
-    if (!user) return;
-    setSavingHome(true);
-    try {
-      await supabase
-        .from("profiles")
-        .update({ home_lat: geo.lat, home_lng: geo.lng })
-        .eq("id", user.id);
-      setHomeGeo(geo);
-      setShowHomeSelector(false);
-      push({ kind: "success", title: "Home area updated", body: geo.line1 || geo.label.split(",")[0] });
-    } catch {
-      push({ kind: "warning", title: "Couldn't save home area. Try again." });
-    } finally {
-      setSavingHome(false);
-    }
+  // Trust ecosystem inputs — fall back to a stub when stats aren't loaded yet
+  // so the card renders something predictable on first paint.
+  const myStats = trustStats ?? {
+    completedBookings: jobsCompletedTotal,
+    totalBookings: jobsCompletedTotal,
+    partnerCancellations: 0,
+    averageRating,
+    ratedBookings: averageRating != null ? jobsCompletedTotal : 0,
+    responseRatePct: null,
+    punctualityMinutesLate: null,
+    repeatCustomerRatio: null,
   };
+  const myBadges = user
+    ? badgesForPartner(user.id, myStats, { aadhaarVerified: profile?.aadhaar_verified })
+    : [];
 
   return (
     <div className="space-y-5 px-5 pb-6">
+      {/* Trust progress + tier — top of the partner home */}
+      {user && (
+        <div className="space-y-2">
+          <TierProgressCard stats={myStats} badgeCount={myBadges.length} />
+          {myBadges.length > 0 && (
+            <BadgeChips
+              partnerId={user.id}
+              stats={myStats}
+              aadhaarVerified={profile?.aadhaar_verified}
+              size="md"
+              className="px-1"
+            />
+          )}
+        </div>
+      )}
+
       {/* Two availability switches — with clear separation of concerns */}
       <div className="rounded-2xl bg-card p-4 shadow-card space-y-3">
         <SwitchRow
@@ -239,21 +295,6 @@ export const PartnerDashboard = () => {
           onChange={async (v) => {
             await setAvailableNow(v);
             push({ kind: v ? "success" : "info", title: v ? "You're live — instant requests enabled" : "Instant requests paused" });
-            // First-time only: if partner has never set a home area, seed it with
-            // the current GPS so scheduled-booking radius has a reference.
-            // NEVER overwrite an explicitly chosen home area — that's a data loss
-            // bug that would silently replace a search-picked location with GPS.
-            const noHomeSet = homeLat == null || homeLng == null;
-            if (v && user && noHomeSet && navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                ({ coords }) => {
-                  console.log(`[partner-location] seeding home area from GPS (no prior home set): ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
-                  supabase.from("profiles").update({ home_lat: coords.latitude, home_lng: coords.longitude }).eq("id", user.id).then(() => {});
-                },
-                () => {},
-                { enableHighAccuracy: true, timeout: 8000 },
-              );
-            }
           }}
           color="success"
         />
@@ -271,88 +312,6 @@ export const PartnerDashboard = () => {
         />
       </div>
 
-      {/* Home area — used as reference for scheduled booking radius */}
-      <div className="rounded-2xl bg-card p-4 shadow-card space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent">
-              <Home className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">Home area</p>
-              <p className="text-[11px] text-muted-foreground">
-                Used as reference for scheduled bookings ({SCHEDULED_RADIUS_KM} km radius)
-              </p>
-            </div>
-          </div>
-          {!showHomeSelector && (
-            <button
-              onClick={() => setShowHomeSelector(true)}
-              className="rounded-lg bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-foreground"
-            >
-              {homeLat || homeGeo ? "Change" : "Set"}
-            </button>
-          )}
-        </div>
-
-        {(homeGeo || homeLat) && !showHomeSelector && (
-          <div className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
-            <div className="min-w-0 flex-1">
-              {homeGeo ? (
-                <>
-                  <p className="truncate text-xs font-semibold text-foreground">
-                    {homeGeo.line1 || homeGeo.label.split(",")[0]}
-                  </p>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    {[homeGeo.city, homeGeo.state].filter(Boolean).join(", ")}
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground">Home area saved</p>
-              )}
-            </div>
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
-          </div>
-        )}
-
-        {showHomeSelector && (
-          <div className="space-y-2">
-            <AddressSelector
-              placeholder="Search your home area or neighbourhood…"
-              onChange={(geo) => { setHomeGeo(geo); }}
-            />
-            {homeGeo && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setHomeGeo(null); setShowHomeSelector(false); }}
-                  className="flex-1 rounded-xl border border-border bg-card py-2 text-xs font-semibold text-foreground"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={savingHome}
-                  onClick={() => handleSaveHomeArea(homeGeo)}
-                  className="flex-1 rounded-xl gradient-primary py-2 text-xs font-bold text-primary-foreground disabled:opacity-60"
-                >
-                  {savingHome ? <><Loader2 className="inline h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Confirm area"}
-                </button>
-              </div>
-            )}
-            {!homeGeo && (
-              <button
-                type="button"
-                onClick={() => setShowHomeSelector(false)}
-                className="w-full rounded-xl border border-border bg-card py-2 text-xs font-semibold text-foreground"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* Schedule editor */}
       <div className="rounded-2xl bg-card p-4 shadow-card">
@@ -529,6 +488,50 @@ export const PartnerDashboard = () => {
                 refLat={partnerLat}
                 refLng={partnerLng}
                 accepting={accepting === r.id}
+                declining={declining === r.id}
+                onAccept={() => respond(r.id, "accept")}
+                onDecline={() => respond(r.id, "decline")}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Personal Requests — direct from a customer who favorited this partner.
+           Bypass distance/availability filters; show with premium styling. */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="flex items-center gap-1.5 text-base font-bold text-foreground">
+              <Heart className="h-4 w-4 fill-destructive text-destructive" />
+              Personal Booking Requests
+            </h2>
+            <p className="text-[10px] text-muted-foreground">
+              Direct requests from customers who favorited you · always shown
+            </p>
+          </div>
+          {personalRequests.length > 0 && (
+            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+              {personalRequests.length} new
+            </span>
+          )}
+        </div>
+        {personalRequests.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-6 text-center shadow-soft">
+            <Sparkles className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm font-semibold text-foreground">No personal requests yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Customers who favorite you can send bookings here directly.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {personalRequests.map((r) => (
+              <PersonalRequestCard
+                key={r.id}
+                request={r}
+                accepting={accepting === r.id}
+                declining={declining === r.id}
                 onAccept={() => respond(r.id, "accept")}
                 onDecline={() => respond(r.id, "decline")}
               />
@@ -562,10 +565,16 @@ export const PartnerDashboard = () => {
         ) : !reservedHomeSet ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
             <Home className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm font-semibold text-foreground">Set your home area</p>
+            <p className="text-sm font-semibold text-foreground">Add a default address</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Reserved bookings are matched against your saved home area, not your current location.
+              Reserved bookings match against your default saved address. Add one in Profile → Saved Addresses.
             </p>
+            <button
+              onClick={() => navigate({ name: "addresses" })}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg gradient-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-soft"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add address
+            </button>
           </div>
         ) : reservedRequests.length === 0 ? (
           <div className="rounded-2xl bg-card p-6 text-center shadow-soft">
@@ -603,11 +612,12 @@ interface RequestCardProps {
   refLat: number | null;
   refLng: number | null;
   accepting: boolean;
+  declining: boolean;
   onAccept: () => void;
   onDecline: () => void;
 }
 
-const RequestCard = ({ request: r, refLat, refLng, accepting, onAccept, onDecline }: RequestCardProps) => {
+const RequestCard = ({ request: r, refLat, refLng, accepting, declining, onAccept, onDecline }: RequestCardProps) => {
   const distKm =
     refLat != null && refLng != null && r.userLat != null && r.userLng != null
       ? haversineKm(refLat, refLng, r.userLat, r.userLng).toFixed(1) + " km"
@@ -642,18 +652,106 @@ const RequestCard = ({ request: r, refLat, refLng, accepting, onAccept, onDeclin
             {r.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
           </p>
         )}
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        {/* Click targets — explicit type=button + relative/z-10 so a parent
+            decoration can never sit on top and intercept the tap. */}
+        <div className="mt-3 grid grid-cols-2 gap-2 relative z-10">
           <button
+            type="button"
             onClick={onDecline}
-            disabled={accepting}
-            className="flex items-center justify-center gap-1 rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary disabled:opacity-50"
+            disabled={accepting || declining}
+            className="flex items-center justify-center gap-1 rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X className="h-3.5 w-3.5" /> Decline
+            {declining ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Declining…</>
+            ) : (
+              <><X className="h-3.5 w-3.5" /> Decline</>
+            )}
           </button>
           <button
+            type="button"
             onClick={onAccept}
-            disabled={accepting}
-            className="flex items-center justify-center gap-1 rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft transition-bounce active:scale-95 disabled:opacity-60"
+            disabled={accepting || declining}
+            className="flex items-center justify-center gap-1 rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft transition-bounce active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {accepting ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Accepting…</>
+            ) : (
+              <><CheckCircle2 className="h-3.5 w-3.5" /> Accept</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface PersonalRequestCardProps {
+  request: import("@/types").Booking;
+  accepting: boolean;
+  declining: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+}
+
+const PersonalRequestCard = ({
+  request: r, accepting, declining, onAccept, onDecline,
+}: PersonalRequestCardProps) => {
+  const isReserved = r.type === "scheduled";
+  return (
+    <div className="overflow-hidden rounded-2xl border border-destructive/30 bg-card shadow-card animate-fade-in-up">
+      {/* Premium ribbon */}
+      <div className="flex items-center justify-between gradient-primary px-4 py-2 text-primary-foreground">
+        <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider">
+          <Heart className="h-3.5 w-3.5 fill-current" />
+          Personal Request
+        </div>
+        <span className="text-xs font-bold">₹{r.service.price}</span>
+      </div>
+      <div className="p-4">
+        <p className="text-sm font-bold text-foreground">{r.service.name}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+          {isReserved ? (
+            <><CalendarClock className="h-3 w-3 text-accent" /> Scheduled booking</>
+          ) : (
+            <><Zap className="h-3 w-3 text-primary" /> Instant booking</>
+          )}
+        </p>
+        {r.personalMessage && (
+          <div className="mt-2 rounded-lg bg-secondary px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" /> Customer note
+            </p>
+            <p className="mt-0.5 text-xs italic text-foreground">{r.personalMessage}</p>
+          </div>
+        )}
+        <div className="mt-2 flex items-start gap-1 text-[11px] text-muted-foreground">
+          <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+          <span className="line-clamp-2">{r.address}</span>
+        </div>
+        {isReserved && r.scheduledAt && (
+          <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-foreground">
+            <CalendarClock className="h-3 w-3 text-accent" />
+            {r.scheduledAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+          </p>
+        )}
+        <div className="mt-3 grid grid-cols-2 gap-2 relative z-10">
+          <button
+            type="button"
+            onClick={onDecline}
+            disabled={accepting || declining}
+            className="flex items-center justify-center gap-1 rounded-xl border border-border bg-card py-2.5 text-xs font-semibold text-muted-foreground transition-smooth hover:bg-secondary active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {declining ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Declining…</>
+            ) : (
+              <><X className="h-3.5 w-3.5" /> Decline</>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onAccept}
+            disabled={accepting || declining}
+            className="flex items-center justify-center gap-1 rounded-xl gradient-primary py-2.5 text-xs font-bold text-primary-foreground shadow-soft transition-bounce active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {accepting ? (
               <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Accepting…</>

@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus, Search } from "lucide-react";
+import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus, Search, Heart, MessageSquare } from "lucide-react";
 import { services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
 import { useUserData } from "@/contexts/UserDataContext";
+import { useFavorites } from "@/contexts/FavoritesContext";
 import { PreferencesEditor } from "./PreferencesEditor";
 import { AddressSelector, type GeoAddress } from "./AddressSelector";
+import { AvatarBadge } from "./AvatarBadge";
 import { cancellationPolicy } from "@/data/services";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,9 @@ export const BookingFlow = ({ serviceId }: Props) => {
   const { navigate, createBooking } = useApp();
   const { preferences } = useMarketplaceData();
   const { addresses, defaultAddress } = useUserData();
+  const { favorites } = useFavorites();
+  const [targetPartnerId, setTargetPartnerId] = useState<string | null>(null);
+  const [personalMessage, setPersonalMessage] = useState("");
   const service = services.find((s) => s.id === serviceId);
   const [mode, setMode] = useState<"instant" | "scheduled" | null>(null);
   const [date, setDate] = useState<Date>(dateOptions[0]);
@@ -86,6 +91,8 @@ export const BookingFlow = ({ serviceId }: Props) => {
       undefined,
       selectedAddress.latitude ?? undefined,
       selectedAddress.longitude ?? undefined,
+      targetPartnerId ?? undefined,
+      targetPartnerId && personalMessage.trim() ? personalMessage.trim() : undefined,
     );
     // Navigate directly to live-status which handles the "searching" state
     navigate({ name: "live-status", bookingId: booking.id });
@@ -150,6 +157,77 @@ export const BookingFlow = ({ serviceId }: Props) => {
           </button>
         </div>
       </div>
+
+      {/* Optional: send this booking directly to a favorite partner.
+          Bypasses the general matching queue; only the chosen partner sees
+          it in their "Personal Booking Requests" section. */}
+      {mode && favorites.length > 0 && (
+        <div className="mt-5 animate-fade-in-up rounded-2xl border border-destructive/20 bg-card p-4 shadow-soft">
+          <div className="flex items-center gap-2">
+            <Heart className="h-4 w-4 fill-destructive text-destructive" />
+            <p className="text-sm font-bold text-foreground">Send directly to a favorite?</p>
+            {targetPartnerId && (
+              <button
+                type="button"
+                onClick={() => { setTargetPartnerId(null); setPersonalMessage(""); }}
+                className="ml-auto text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Skip the matching queue and route this booking to one favorite partner.
+          </p>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {favorites.map((f) => {
+              const selected = targetPartnerId === f.partnerId;
+              return (
+                <button
+                  key={f.partnerId}
+                  type="button"
+                  onClick={() => setTargetPartnerId(selected ? null : f.partnerId)}
+                  className={cn(
+                    "flex min-w-[100px] shrink-0 flex-col items-center gap-1.5 rounded-xl border-2 p-2.5 transition-bounce",
+                    selected
+                      ? "border-destructive bg-destructive/5 shadow-card"
+                      : "border-border bg-card hover:border-destructive/40",
+                  )}
+                >
+                  <AvatarBadge
+                    src={f.partnerAvatarUrl}
+                    name={f.partnerName}
+                    className="h-10 w-10 text-xs"
+                  />
+                  <span className="line-clamp-1 text-[11px] font-semibold text-foreground">
+                    {f.partnerName.split(" ")[0]}
+                  </span>
+                  {selected && (
+                    <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-destructive-foreground">
+                      Selected
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {targetPartnerId && (
+            <div className="mt-3">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <MessageSquare className="h-3 w-3" /> Note for the partner (optional)
+              </label>
+              <textarea
+                value={personalMessage}
+                onChange={(e) => setPersonalMessage(e.target.value)}
+                rows={2}
+                maxLength={240}
+                placeholder="e.g. Could you bring extra cleaning supplies?"
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-destructive/40"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {mode === "scheduled" && (
         <div className="mt-5 animate-fade-in-up rounded-2xl bg-card p-4 shadow-card">

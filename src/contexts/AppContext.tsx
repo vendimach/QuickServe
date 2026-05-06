@@ -1,11 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
-import type { Booking, Role, Service, BookingType, Professional, ServicePreferences } from "@/types";
+import type { Booking, ExtensionStatus, Role, Service, BookingType, Professional, ServicePreferences } from "@/types";
 import { professionals as allPros, services as allServices } from "@/data/services";
 import { useAuth } from "./AuthContext";
 import { useNotifications } from "./NotificationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerData } from "./PartnerDataContext";
+import { useWallet } from "./WalletContext";
 import { useLocation, useNavigate as useRouterNavigate, useParams } from "react-router-dom";
+import {
+  parseDurationToMinutes,
+  finalBilledAmount,
+  extensionCost,
+} from "@/lib/bookingTimer";
 
 export type View =
   | { name: "home" }
@@ -23,6 +29,8 @@ export type View =
   | { name: "chat"; bookingId: string }
   | { name: "live-cam"; bookingId: string }
   | { name: "refer-earn" }
+  | { name: "wallet" }
+  | { name: "favorites" }
   | { name: "addresses" }
   | { name: "payments" }
   | { name: "edit-profile" }
@@ -51,6 +59,8 @@ export const viewToPath = (v: View): string => {
     case "chat": return `/chat/${v.bookingId}`;
     case "live-cam": return `/cam/${v.bookingId}`;
     case "refer-earn": return "/refer-earn";
+    case "wallet": return "/profile/wallet";
+    case "favorites": return "/profile/favorites";
     case "addresses": return "/profile/addresses";
     case "payments": return "/profile/payments";
     case "edit-profile": return "/profile/edit";
@@ -75,6 +85,8 @@ export const pathToView = (pathname: string, role: Role): View => {
   if (a === "bookings") return { name: "bookings" };
   if (a === "profile" && b === "addresses") return { name: "addresses" };
   if (a === "profile" && b === "payments") return { name: "payments" };
+  if (a === "profile" && b === "wallet") return { name: "wallet" };
+  if (a === "profile" && b === "favorites") return { name: "favorites" };
   if (a === "profile" && b === "edit") return { name: "edit-profile" };
   if (a === "profile") return { name: "profile" };
   if (a === "notifications") return { name: "notifications" };
@@ -109,6 +121,10 @@ interface AppContextValue {
     paymentMethodLabel?: string,
     addressLat?: number,
     addressLng?: number,
+    /** Send this booking exclusively to a specific favorite partner. */
+    targetPartnerId?: string,
+    /** Note shown alongside a personal request on the partner's card. */
+    personalMessage?: string,
   ) => Booking;
   availableBookings: Booking[];
   partnerAcceptBooking: (bookingId: string, professional: Professional) => Promise<{ ok: boolean; reason?: string }>;
@@ -118,6 +134,10 @@ interface AppContextValue {
   completeBooking: (bookingId: string) => void;
   markRated: (bookingId: string) => void;
   saveRating: (bookingId: string, rating: number, comment?: string) => Promise<void>;
+  /** Customer requests extra time. Returns reason on failure. */
+  requestExtension: (bookingId: string, minutes: number, message?: string) => Promise<{ ok: boolean; reason?: string }>;
+  /** Partner responds to a pending extension request. */
+  respondToExtension: (bookingId: string, decision: "accept" | "decline") => Promise<{ ok: boolean; reason?: string }>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -156,6 +176,18 @@ type BookingRow = {
   user_lng: number | null;
   partner_lat: number | null;
   partner_lng: number | null;
+  // Timer / billing
+  planned_duration_minutes?: number | null;
+  planned_end_time?: string | null;
+  actual_duration_minutes?: number | null;
+  final_amount?: number | null;
+  extension_minutes?: number | null;
+  extension_charges?: number | null;
+  extension_request_minutes?: number | null;
+  extension_request_message?: string | null;
+  extension_status?: ExtensionStatus | null;
+  requested_partner_id?: string | null;
+  personal_message?: string | null;
 };
 
 const rowToBooking = (r: BookingRow): Booking => {
@@ -209,6 +241,17 @@ const rowToBooking = (r: BookingRow): Booking => {
     partnerLat: r.partner_lat ?? undefined,
     partnerLng: r.partner_lng ?? undefined,
     partnerUserId: r.partner_user_id ?? undefined,
+    plannedDurationMinutes: r.planned_duration_minutes ?? undefined,
+    plannedEndTime: r.planned_end_time ? new Date(r.planned_end_time) : undefined,
+    actualDurationMinutes: r.actual_duration_minutes ?? undefined,
+    finalAmount: r.final_amount != null ? Number(r.final_amount) : undefined,
+    extensionMinutes: r.extension_minutes ?? 0,
+    extensionCharges: r.extension_charges != null ? Number(r.extension_charges) : 0,
+    extensionRequestMinutes: r.extension_request_minutes ?? undefined,
+    extensionRequestMessage: r.extension_request_message ?? undefined,
+    extensionStatus: (r.extension_status ?? "none") as ExtensionStatus,
+    requestedPartnerId: r.requested_partner_id ?? undefined,
+    personalMessage: r.personal_message ?? undefined,
   };
 };
 
@@ -230,6 +273,7 @@ const generateBookingId = (): string => {
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { role: authRole, user } = useAuth();
   const { push } = useNotifications();
+  const { creditRefund, onFirstBookingCompleted } = useWallet();
   const routerNavigate = useRouterNavigate();
   const location = useLocation();
   const role: Role = authRole ?? "customer";
@@ -294,6 +338,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .eq("status", "searching")
         .is("partner_id", null)
         .neq("user_id", user.id)
+        // Personal-request rows are only visible to their target partner.
+        // Everyone else sees them as if they don't exist.
+        .or(`requested_partner_id.is.null,requested_partner_id.eq.${user.id}`)
         .order("created_at", { ascending: false })
         .then(({ data }) => {
           if (!mounted || !data) return;
@@ -331,12 +378,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             // initial fetch.
             const isFreshScheduled =
               b.type !== "scheduled" || !b.scheduledAt || b.scheduledAt.getTime() >= Date.now();
+            // Personal-request gating: if requested_partner_id is set, only
+            // the target partner is allowed to see it; everyone else skips.
+            const personalAllowed =
+              !row.requested_partner_id || row.requested_partner_id === user.id;
             if (
               role === "partner" &&
               b.status === "searching" &&
               row.user_id !== user.id &&
               !row.partner_id &&
-              isFreshScheduled
+              isFreshScheduled &&
+              personalAllowed
             ) {
               setAvailableBookings((prev) => prev.find((x) => x.id === b.id) ? prev : [b, ...prev]);
             } else {
@@ -364,10 +416,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             } else if (role === "partner" && row.user_id !== user.id) {
               // Still searching → either update an existing entry OR add a
               // newly-eligible row (e.g. partner_id was cleared by the
-              // backend). Honors the same scheduled freshness rule.
+              // backend). Honors the same scheduled freshness rule and the
+              // personal-request target check.
               const isFreshScheduled =
                 b.type !== "scheduled" || !b.scheduledAt || b.scheduledAt.getTime() >= Date.now();
-              if (isFreshScheduled) {
+              const personalAllowed =
+                !row.requested_partner_id || row.requested_partner_id === user.id;
+              if (isFreshScheduled && personalAllowed) {
                 setAvailableBookings((prev) => {
                   const exists = prev.find((x) => x.id === b.id);
                   if (exists) {
@@ -418,8 +473,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     paymentMethodLabel,
     addressLat,
     addressLng,
+    targetPartnerId,
+    personalMessage,
   ) => {
     const bookingId = generateBookingId();
+    const isPersonal = !!targetPartnerId;
     const booking: Booking = {
       id: bookingId,
       service,
@@ -436,6 +494,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       startOtp: undefined,
       userLat: addressLat,
       userLng: addressLng,
+      requestedPartnerId: targetPartnerId,
+      personalMessage: personalMessage,
     };
     setBookings((prev) => [booking, ...prev]);
 
@@ -458,6 +518,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           payment_method: paymentMethodLabel ?? null,
           user_lat: addressLat ?? null,
           user_lng: addressLng ?? null,
+          requested_partner_id: targetPartnerId ?? null,
+          personal_message: personalMessage ?? null,
         }])
         .select()
         .single()
@@ -471,8 +533,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     push({
       kind: "info",
-      title: "Searching for partners",
-      body: `${service.name} • Awaiting partner acceptances`,
+      title: isPersonal ? "Personal request sent" : "Searching for partners",
+      body: isPersonal
+        ? `${service.name} • Sent to your favorite partner`
+        : `${service.name} • Awaiting partner acceptances`,
     });
 
     return booking;
@@ -564,7 +628,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const cancelBooking: AppContextValue["cancelBooking"] = (bookingId, reason, fee = 0) => {
     const now = new Date();
-    const wasPaid = bookings.find((b) => b.id === bookingId)?.paymentStatus === "paid";
+    const target = bookings.find((b) => b.id === bookingId);
+    const wasPaid = target?.paymentStatus === "paid";
     const newStatus: Booking["status"] = wasPaid ? "refunded" : "cancelled";
     setBookings((prev) =>
       prev.map((b) =>
@@ -586,7 +651,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .eq("id", bookingId)
         .then(() => {});
     }
-    push({ kind: "warning", title: wasPaid ? "Booking cancelled — refund initiated" : "Booking cancelled" });
+    // Refunds land in the user's wallet (minus any cancellation fee). Idempotent
+    // by bookingId so a re-fired cancellation can never double-credit.
+    if (wasPaid && target) {
+      const refundAmount = Math.max(0, target.service.price - fee);
+      if (refundAmount > 0) {
+        creditRefund(bookingId, refundAmount, `Refund for ${target.service.name}`);
+      }
+    }
+    push({ kind: "warning", title: wasPaid ? "Booking cancelled — refund credited to wallet" : "Booking cancelled" });
   };
 
   const partnerStartService: AppContextValue["partnerStartService"] = (bookingId, otp) => {
@@ -594,13 +667,45 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (!b || !b.startOtp) return false;
     if (b.startOtp !== otp.trim()) return false;
     const now = new Date();
+    // Snapshot the planned duration at start. Anything we add later (extensions)
+    // is layered on top of this baseline; the original price/duration ratio is
+    // what drives prorated early-completion billing.
+    const plannedMinutes = parseDurationToMinutes(b.service.duration, 60);
+    const plannedEnd = new Date(now.getTime() + plannedMinutes * 60_000);
+    console.log("[booking/timer] start", {
+      bookingId,
+      startedAt: now.toISOString(),
+      plannedMinutes,
+      plannedEnd: plannedEnd.toISOString(),
+    });
     setBookings((prev) =>
-      prev.map((x) => (x.id === bookingId ? { ...x, status: "in-progress", startedAt: now } : x)),
+      prev.map((x) =>
+        x.id === bookingId
+          ? {
+              ...x,
+              status: "in-progress",
+              startedAt: now,
+              plannedDurationMinutes: plannedMinutes,
+              plannedEndTime: plannedEnd,
+              extensionMinutes: 0,
+              extensionCharges: 0,
+              extensionStatus: "none",
+            }
+          : x,
+      ),
     );
     if (user) {
       supabase
         .from("bookings")
-        .update({ status: "in-progress", started_at: now.toISOString() })
+        .update({
+          status: "in-progress",
+          started_at: now.toISOString(),
+          planned_duration_minutes: plannedMinutes,
+          planned_end_time: plannedEnd.toISOString(),
+          extension_minutes: 0,
+          extension_charges: 0,
+          extension_status: "none",
+        })
         .eq("id", bookingId)
         .then(() => {});
     }
@@ -610,17 +715,214 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const completeBooking: AppContextValue["completeBooking"] = (bookingId) => {
     const now = new Date();
+    // Capture pre-completion state so we can detect "this user's first
+    // successful booking" for the referral payout.
+    const target = bookings.find((b) => b.id === bookingId);
+    const completedByCustomer = target?.partnerUserId !== user?.id;
+    const previouslyCompleted = bookings.some(
+      (b) => b.status === "completed" && b.id !== bookingId,
+    );
+
+    // Compute prorated final amount. If the timer hadn't started (legacy rows
+    // or partner completing without OTP) we just bill the full service price.
+    let actualMinutes = 0;
+    let finalAmount = target?.service.price ?? 0;
+    if (target?.startedAt && target?.plannedDurationMinutes) {
+      actualMinutes = Math.max(
+        0,
+        Math.round((now.getTime() - target.startedAt.getTime()) / 60_000),
+      );
+      const billing = finalBilledAmount({
+        price: target.service.price,
+        plannedMinutes: target.plannedDurationMinutes,
+        elapsedMinutes: actualMinutes,
+        extensionMinutes: target.extensionMinutes ?? 0,
+      });
+      finalAmount = billing.total;
+      console.log("[booking/timer] complete", {
+        bookingId,
+        actualMinutes,
+        plannedMinutes: target.plannedDurationMinutes,
+        extensionMinutes: target.extensionMinutes ?? 0,
+        basePortion: billing.basePortion,
+        extensionPortion: billing.extensionPortion,
+        finalAmount,
+      });
+    }
+
     setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: "completed", completedAt: now } : b)),
+      prev.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              status: "completed",
+              completedAt: now,
+              actualDurationMinutes: actualMinutes,
+              finalAmount,
+            }
+          : b,
+      ),
     );
     if (user) {
       supabase
         .from("bookings")
-        .update({ status: "completed", completed_at: now.toISOString() })
+        .update({
+          status: "completed",
+          completed_at: now.toISOString(),
+          actual_duration_minutes: actualMinutes,
+          final_amount: finalAmount,
+        })
         .eq("id", bookingId)
         .then(() => {});
     }
+    // Referral payout: only when the *customer*'s first booking completes.
+    if (completedByCustomer && !previouslyCompleted) {
+      onFirstBookingCompleted(bookingId);
+    }
     push({ kind: "success", title: "Service completed", body: "Please rate your professional" });
+  };
+
+  // ── Extension flow ────────────────────────────────────────────────────────
+  const requestExtension: AppContextValue["requestExtension"] = async (
+    bookingId,
+    minutes,
+    message,
+  ) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return { ok: false, reason: "Booking not found" };
+    if (b.status !== "in-progress") return { ok: false, reason: "Service is not active" };
+    if (b.extensionStatus === "pending") {
+      return { ok: false, reason: "An extension request is already pending" };
+    }
+    if (minutes <= 0) return { ok: false, reason: "Invalid extension duration" };
+
+    console.log("[booking/extension] request", { bookingId, minutes, message });
+    setBookings((prev) =>
+      prev.map((x) =>
+        x.id === bookingId
+          ? {
+              ...x,
+              extensionStatus: "pending",
+              extensionRequestMinutes: minutes,
+              extensionRequestMessage: message,
+            }
+          : x,
+      ),
+    );
+    if (user) {
+      const { error } = await supabase
+        .from("bookings")
+        .update({
+          extension_status: "pending",
+          extension_request_minutes: minutes,
+          extension_request_message: message ?? null,
+        })
+        .eq("id", bookingId);
+      if (error) {
+        console.error("[booking/extension] persist failed", error);
+        // Roll the optimistic state back so the UI reflects reality.
+        setBookings((prev) =>
+          prev.map((x) =>
+            x.id === bookingId
+              ? { ...x, extensionStatus: "none", extensionRequestMinutes: undefined, extensionRequestMessage: undefined }
+              : x,
+          ),
+        );
+        return { ok: false, reason: error.message };
+      }
+    }
+    push({ kind: "info", title: "Extension request sent", body: `Asked for ${minutes} more minutes` });
+    return { ok: true };
+  };
+
+  const respondToExtension: AppContextValue["respondToExtension"] = async (
+    bookingId,
+    decision,
+  ) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return { ok: false, reason: "Booking not found" };
+    if (b.extensionStatus !== "pending" || !b.extensionRequestMinutes) {
+      return { ok: false, reason: "No pending extension request" };
+    }
+
+    if (decision === "decline") {
+      console.log("[booking/extension] declined", { bookingId, minutes: b.extensionRequestMinutes });
+      setBookings((prev) =>
+        prev.map((x) =>
+          x.id === bookingId
+            ? { ...x, extensionStatus: "declined", extensionRequestMinutes: undefined, extensionRequestMessage: undefined }
+            : x,
+        ),
+      );
+      if (user) {
+        await supabase
+          .from("bookings")
+          .update({
+            extension_status: "declined",
+            extension_request_minutes: null,
+            extension_request_message: null,
+          })
+          .eq("id", bookingId);
+      }
+      push({ kind: "warning", title: "Extension declined" });
+      return { ok: true };
+    }
+
+    // Accept: extend planned end time, accumulate extension minutes/charges.
+    const addedMinutes = b.extensionRequestMinutes;
+    const newExtensionMinutes = (b.extensionMinutes ?? 0) + addedMinutes;
+    const addedCost = extensionCost(
+      b.service.price,
+      b.plannedDurationMinutes ?? parseDurationToMinutes(b.service.duration, 60),
+      addedMinutes,
+    );
+    const newCharges = (b.extensionCharges ?? 0) + addedCost;
+    const baseEnd = b.plannedEndTime ?? (b.startedAt
+      ? new Date(b.startedAt.getTime() + (b.plannedDurationMinutes ?? 60) * 60_000)
+      : new Date());
+    const newEnd = new Date(baseEnd.getTime() + addedMinutes * 60_000);
+
+    console.log("[booking/extension] accepted", {
+      bookingId,
+      addedMinutes,
+      newExtensionMinutes,
+      addedCost,
+      newPlannedEnd: newEnd.toISOString(),
+    });
+    setBookings((prev) =>
+      prev.map((x) =>
+        x.id === bookingId
+          ? {
+              ...x,
+              extensionStatus: "accepted",
+              extensionMinutes: newExtensionMinutes,
+              extensionCharges: newCharges,
+              plannedEndTime: newEnd,
+              extensionRequestMinutes: undefined,
+              extensionRequestMessage: undefined,
+            }
+          : x,
+      ),
+    );
+    if (user) {
+      const { error } = await supabase
+        .from("bookings")
+        .update({
+          extension_status: "accepted",
+          extension_minutes: newExtensionMinutes,
+          extension_charges: newCharges,
+          planned_end_time: newEnd.toISOString(),
+          extension_request_minutes: null,
+          extension_request_message: null,
+        })
+        .eq("id", bookingId);
+      if (error) {
+        console.error("[booking/extension] accept persist failed", error);
+        return { ok: false, reason: error.message };
+      }
+    }
+    push({ kind: "success", title: "Extension accepted", body: `+${addedMinutes} min · +₹${addedCost}` });
+    return { ok: true };
   };
 
   const markRated: AppContextValue["markRated"] = (bookingId) => {
@@ -658,6 +960,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         completeBooking,
         markRated,
         saveRating,
+        requestExtension,
+        respondToExtension,
       }}
     >
       {children}

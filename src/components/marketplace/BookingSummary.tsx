@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, StickyNote } from "lucide-react";
+import { CheckCircle2, Clock, MapPin, Star, CreditCard, Receipt, ArrowLeft, StickyNote, Timer, Heart, Calendar } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useFavorites, FAVORITES_LIMIT } from "@/contexts/FavoritesContext";
 import { payWithRazorpay } from "@/lib/razorpay";
 import { cn } from "@/lib/utils";
+import { formatMinutes, finalBilledAmount, parseDurationToMinutes } from "@/lib/bookingTimer";
 interface Props { bookingId: string }
 
 const fmtTime = (d?: Date) =>
@@ -27,6 +29,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
   const { addReview } = useMarketplaceData();
   const { profile, user } = useAuth();
   const { push } = useNotifications();
+  const { isFavorite, addFavorite, count: favoritesCount } = useFavorites();
   const booking = bookings.find((b) => b.id === bookingId);
 
   const [rating, setRating] = useState(0);
@@ -57,6 +60,31 @@ export const BookingSummary = ({ bookingId }: Props) => {
   };
 
   const totalDuration = durationMs(booking.startedAt, booking.completedAt);
+
+  // ── Billing breakdown ────────────────────────────────────────────────────
+  // Recompute on the client so the summary stays correct even if the
+  // persisted final_amount column is missing on older rows.
+  const plannedMin =
+    booking.plannedDurationMinutes ?? parseDurationToMinutes(booking.service.duration, 60);
+  const actualMin =
+    booking.actualDurationMinutes ??
+    (booking.startedAt && booking.completedAt
+      ? Math.max(0, Math.round(
+        (booking.completedAt.getTime() - booking.startedAt.getTime()) / 60000,
+      ))
+      : 0);
+  const extensionMin = booking.extensionMinutes ?? 0;
+  const billing = finalBilledAmount({
+    price: booking.service.price,
+    plannedMinutes: plannedMin,
+    elapsedMinutes: actualMin,
+    extensionMinutes: extensionMin,
+  });
+  // Prefer the persisted finalAmount if present (it's authoritative); otherwise
+  // fall back to the freshly-computed total.
+  const finalTotal = booking.finalAmount ?? billing.total;
+  const earlyFinish = actualMin < plannedMin;
+
   const paid = booking.paymentStatus === "paid";
   const refunded = booking.paymentStatus === "refunded";
   const codish = (booking.paymentMethod ?? "").toLowerCase() === "cod";
@@ -70,7 +98,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
   const handlePay = async () => {
     setPaying(true);
     const res = await payWithRazorpay({
-      amount: booking.service.price,
+      amount: finalTotal,
       bookingId: booking.id,
       customerName: profile?.full_name,
       customerEmail: user?.email ?? undefined,
@@ -79,7 +107,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
     });
     setPaying(false);
     if (res.paid) {
-      push({ kind: "success", title: "Payment successful", body: `₹${booking.service.price} paid` });
+      push({ kind: "success", title: "Payment successful", body: `₹${finalTotal} paid` });
     } else if (res.reason && res.reason !== "Payment cancelled") {
       push({ kind: "warning", title: "Payment failed", body: res.reason });
     }
@@ -190,6 +218,109 @@ export const BookingSummary = ({ bookingId }: Props) => {
         </div>
       )}
 
+      {/* Service usage summary — shown only when completed */}
+      {completed && (
+        <div className="rounded-3xl bg-card p-5 shadow-soft animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-primary" />
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Service usage</p>
+            {earlyFinish && extensionMin === 0 && (
+              <span className="ml-auto rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
+                Early finish
+              </span>
+            )}
+            {extensionMin > 0 && (
+              <span className="ml-auto rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+                +{extensionMin} min extension
+              </span>
+            )}
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            <Row label="Original duration" value={formatMinutes(plannedMin)} />
+            <Row label="Actual time used" value={formatMinutes(actualMin)} highlight={earlyFinish} />
+            {extensionMin > 0 && (
+              <Row label="Extensions added" value={`+${formatMinutes(extensionMin)}`} />
+            )}
+            <Row label="Original amount" value={`₹${booking.service.price}`} />
+            {extensionMin > 0 && (
+              <Row label="Extension charges" value={`+₹${billing.extensionPortion}`} />
+            )}
+            {earlyFinish && billing.basePortion < booking.service.price && (
+              <Row label="Prorated discount" value={`−₹${booking.service.price - billing.basePortion}`} highlight />
+            )}
+            <Row label="Final billed amount" value={`₹${finalTotal}`} highlight />
+          </div>
+        </div>
+      )}
+
+      {/* Favorite + Rebook — only after a successful completion, only for the
+          customer (not the partner viewing their own job summary), and only
+          when the partner is a known user (we don't favorite seed pros). */}
+      {completed && booking.partnerUserId && booking.partnerUserId !== user?.id && (() => {
+        const partnerId = booking.partnerUserId;
+        const alreadyFav = isFavorite(partnerId);
+        const partnerName = professional.name;
+        const limitReached = !alreadyFav && favoritesCount >= FAVORITES_LIMIT;
+        return (
+          <div className="rounded-3xl bg-card p-5 shadow-card animate-fade-in-up">
+            <div className="flex items-center gap-2">
+              <Heart className={cn("h-4 w-4", alreadyFav ? "fill-destructive text-destructive" : "text-destructive")} />
+              <p className="text-sm font-bold text-foreground">
+                {alreadyFav
+                  ? `${partnerName} is in your favorites`
+                  : `Liked ${partnerName}'s service?`}
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {alreadyFav
+                ? "They'll be matched first on your next booking, and you can send them direct requests."
+                : "Add to Favorites for priority matching next time, or send them a direct request anytime."}
+            </p>
+            {limitReached && !alreadyFav && (
+              <p className="mt-2 rounded-lg bg-warning/10 px-3 py-2 text-[11px] font-medium text-warning">
+                Favorites are capped at {FAVORITES_LIMIT}. Remove someone from your list to make room.
+              </p>
+            )}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (alreadyFav) return;
+                  const result = addFavorite({
+                    partnerId,
+                    partnerName,
+                    partnerAvatarUrl: professional.avatarUrl,
+                    lastBookingId: booking.id,
+                  });
+                  if (result.ok) {
+                    push({ kind: "success", title: "Added to favorites", body: partnerName });
+                  } else {
+                    push({ kind: "warning", title: "Couldn't add favorite", body: result.reason });
+                  }
+                }}
+                disabled={alreadyFav || limitReached}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold transition-smooth disabled:cursor-not-allowed",
+                  alreadyFav
+                    ? "bg-destructive/10 text-destructive disabled:opacity-100"
+                    : "gradient-primary text-primary-foreground shadow-soft disabled:opacity-50",
+                )}
+              >
+                <Heart className={cn("h-3.5 w-3.5", alreadyFav && "fill-current")} />
+                {alreadyFav ? "In favorites" : "Add to favorites"}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate({ name: "booking-flow", serviceId: booking.service.id })}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2.5 text-xs font-bold text-foreground transition-smooth hover:bg-secondary"
+              >
+                <Calendar className="h-3.5 w-3.5" /> Rebook
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Payment — service is done, collect now */}
       {completed && (
         <div className="rounded-3xl bg-card p-5 shadow-soft">
@@ -198,7 +329,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment</p>
           </div>
           <div className="mt-3 space-y-2 text-sm">
-            <Row label="Amount" value={`₹${booking.service.price}`} />
+            <Row label="Amount due" value={`₹${finalTotal}`} highlight />
             <Row label="Method" value={booking.paymentMethod ?? "—"} />
             <Row
               label="Status"
@@ -213,7 +344,7 @@ export const BookingSummary = ({ bookingId }: Props) => {
               disabled={paying}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
             >
-              <CreditCard className="h-4 w-4" /> {paying ? "Opening payment…" : `Pay ₹${booking.service.price}`}
+              <CreditCard className="h-4 w-4" /> {paying ? "Opening payment…" : `Pay ₹${finalTotal}`}
             </button>
           )}
         </div>

@@ -2,10 +2,19 @@ import { createContext, useCallback, useContext, useEffect, useState, ReactNode 
 import type { Review, ChatMessage, ServicePreferences } from "@/types";
 import { seedReviews } from "@/data/services";
 
+export interface ProfessionalRating {
+  /** Average across all valid review ratings, rounded to 1dp. null if no reviews. */
+  average: number | null;
+  /** Total number of reviews used in the average. */
+  count: number;
+}
+
 interface MarketplaceDataValue {
   reviews: Review[];
   addReview: (r: Omit<Review, "id" | "createdAt">) => void;
   reviewsForPro: (proId: string) => Review[];
+  /** Dynamic rating computed from reviews. Replaces any static professional.rating value. */
+  ratingForPro: (proId: string) => ProfessionalRating;
 
   chats: Record<string, ChatMessage[]>;
   sendMessage: (bookingId: string, from: "customer" | "partner", text: string) => void;
@@ -76,6 +85,23 @@ export const MarketplaceDataProvider = ({ children }: { children: ReactNode }) =
     [reviews],
   );
 
+  // Dynamic rating: average of valid review ratings (1–5). No static fallback —
+  // returns { average: null, count: 0 } when there are no reviews so the UI
+  // can render a clear empty state instead of a fake number.
+  const ratingForPro = useCallback(
+    (proId: string): ProfessionalRating => {
+      const own = reviews.filter(
+        (r) => r.professionalId === proId && typeof r.rating === "number" && r.rating >= 1 && r.rating <= 5,
+      );
+      if (own.length === 0) return { average: null, count: 0 };
+      const sum = own.reduce((s, r) => s + r.rating, 0);
+      // Round to 1 decimal place (e.g. 4.7).
+      const avg = Math.round((sum / own.length) * 10) / 10;
+      return { average: avg, count: own.length };
+    },
+    [reviews],
+  );
+
   const sendMessage: MarketplaceDataValue["sendMessage"] = useCallback((bookingId, from, text) => {
     const msg: ChatMessage = {
       id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -113,7 +139,7 @@ export const MarketplaceDataProvider = ({ children }: { children: ReactNode }) =
 
   return (
     <MarketplaceDataContext.Provider
-      value={{ reviews, addReview, reviewsForPro, chats, sendMessage, preferences, setPreferences }}
+      value={{ reviews, addReview, reviewsForPro, ratingForPro, chats, sendMessage, preferences, setPreferences }}
     >
       {children}
     </MarketplaceDataContext.Provider>

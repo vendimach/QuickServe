@@ -21,7 +21,17 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
 import { safetyInstructions, cancellationPolicy } from "@/data/services";
+import { AvatarBadge } from "./AvatarBadge";
+import {
+  computeTierProgress,
+  computeReliability,
+  proToTrustInputs,
+} from "@/lib/partnerTrust";
+import { TierChip, ReliabilityPill, BadgeChips } from "./TrustBadges";
+import { ServiceTimer, CustomerExtensionPanel } from "./ServiceTimer";
+import { useFavorites } from "@/contexts/FavoritesContext";
 
 interface Props {
   bookingId: string;
@@ -31,6 +41,8 @@ const NO_PROVIDER_TIMEOUT_MS = 5 * 60 * 1000;
 
 export const LiveStatus = ({ bookingId }: Props) => {
   const { bookings, navigate, completeBooking, cancelBooking, partnerStartService, role } = useApp();
+  const { ratingForPro } = useMarketplaceData();
+  const { favoritedByCount } = useFavorites();
   useAuth();
   const [otpInput, setOtpInput] = useState("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
@@ -374,6 +386,27 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </div>
         </div>
 
+        {/* Active service timer + customer extension panel */}
+        {booking.status === "in-progress" && (
+          <>
+            <ServiceTimer booking={booking} />
+            {isCustomer && <CustomerExtensionPanel booking={booking} />}
+            {isCustomer && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Mark this service as complete now? You'll be billed only for the time used.")) {
+                    completeBooking(booking.id);
+                  }
+                }}
+                className="w-full rounded-2xl border border-success/30 bg-success/5 py-3 text-sm font-bold text-success shadow-soft transition-smooth hover:bg-success/10"
+              >
+                <CheckCircle2 className="mr-1 inline h-4 w-4" /> Mark service complete (early)
+              </button>
+            )}
+          </>
+        )}
+
         {/* Customer enters OTP from partner to start service */}
         {awaitingOtp && isCustomer && (
           <form
@@ -424,21 +457,50 @@ export const LiveStatus = ({ bookingId }: Props) => {
             }
             className="mt-3 flex w-full items-center gap-3 text-left"
           >
-            <div className="flex h-14 w-14 items-center justify-center rounded-full gradient-primary text-base font-bold text-primary-foreground shadow-soft">
-              {professional.avatar}
-            </div>
+            <AvatarBadge
+              src={professional.avatarUrl}
+              name={professional.name}
+              className="h-14 w-14 text-base shadow-soft"
+            />
             <div className="flex-1">
-              <p className="text-sm font-bold text-foreground">{professional.name}</p>
-              <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-0.5">
-                  <Star className="h-3 w-3 fill-warning text-warning" />
-                  <span className="font-semibold text-foreground">{professional.rating}</span>
-                </span>
-                <span>•</span>
-                <span>{professional.jobs.toLocaleString()} jobs</span>
-              </div>
+              {(() => {
+                const { average, count } = ratingForPro(professional.id);
+                const stats = proToTrustInputs(
+                  { jobs: professional.jobs, rating: average ?? professional.rating },
+                  { favoritedByCount: favoritedByCount(professional.id) },
+                );
+                const tier = computeTierProgress(stats).current;
+                const reliability = computeReliability(stats);
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-bold text-foreground">{professional.name}</p>
+                      <TierChip tier={tier} size="sm" />
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-0.5">
+                        <Star className="h-3 w-3 fill-warning text-warning" />
+                        <span className="font-semibold text-foreground">
+                          {average != null ? average.toFixed(1) : "New"}
+                        </span>
+                        {count > 0 && <span>({count})</span>}
+                      </span>
+                      <span>•</span>
+                      <span>{professional.jobs.toLocaleString()} jobs</span>
+                      <ReliabilityPill score={reliability.score} size="sm" />
+                    </div>
+                    <BadgeChips
+                      partnerId={professional.id}
+                      stats={stats}
+                      aadhaarVerified
+                      max={3}
+                      className="mt-1.5"
+                    />
+                  </>
+                );
+              })()}
             </div>
-            <span className="text-[10px] font-semibold text-primary">View ›</span>
+            <span className="text-[10px] font-semibold text-primary shrink-0">View ›</span>
           </button>
 
           {!completed && (

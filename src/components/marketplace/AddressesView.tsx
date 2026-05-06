@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowLeft, MapPin, Plus, Trash2, Star, Loader2, CheckCircle2, Pencil } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useNotifications } from "@/contexts/NotificationContext";
 import { useUserData, type SavedAddress } from "@/contexts/UserDataContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,7 @@ import { AddressSelector, type GeoAddress } from "./AddressSelector";
 
 export const AddressesView = () => {
   const { navigate } = useApp();
+  const { push } = useNotifications();
   const { addresses, addAddress, deleteAddress, setDefaultAddress, loadingAddresses } = useUserData();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<SavedAddress | null>(null);
@@ -29,7 +31,10 @@ export const AddressesView = () => {
         <p className="text-xs text-muted-foreground">Tap an address to set as default. Edit or delete anytime.</p>
       </div>
 
-      {loadingAddresses && (
+      {/* Only show the page-level spinner on the very first load, before any
+          addresses exist. Background refreshes (after add/update/delete) keep
+          the list visible to avoid flashing an empty state. */}
+      {loadingAddresses && addresses.length === 0 && (
         <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
         </div>
@@ -108,6 +113,9 @@ export const AddressesView = () => {
 
       {(adding || editing) && (
         <AddressForm
+          // key forces a clean remount when switching between add and edit
+          // modes — guarantees no stale geo/label/makeDefault carries over.
+          key={editing ? `edit-${editing.id}` : "new"}
           existing={editing ?? undefined}
           onCancel={() => { setAdding(false); setEditing(null); }}
           onSaved={async (a) => {
@@ -117,10 +125,13 @@ export const AddressesView = () => {
                 if (a.is_default && saved) {
                   await setDefaultAddress(saved.id);
                 }
+                push({ kind: "success", title: "Address saved", body: a.label });
+              } else {
+                push({ kind: "success", title: "Address updated", body: a.label });
               }
-            } catch {
-              // silently ignore
             } finally {
+              // Always clear form state — on success or any failure — so the
+              // form never persists stale geo data into the next session.
               setAdding(false);
               setEditing(null);
             }
@@ -142,7 +153,7 @@ interface FormProps {
     latitude?: number;
     longitude?: number;
     is_default?: boolean;
-  }) => void;
+  }) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -169,7 +180,7 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!geo) return;
+    if (!geo || saving) return;
     setSaving(true);
     try {
       const payload = {
@@ -186,7 +197,17 @@ const AddressForm = ({ existing, onSaved, onCancel }: FormProps) => {
         await updateAddress(existing.id, payload);
         if (makeDefault) await setDefaultAddress(existing.id);
       }
-      onSaved(payload);
+      // AWAIT the parent's async work (e.g. addAddress + refresh) so the
+      // submit button's loading state stays accurate until the address is
+      // truly persisted. Previously this fired & forgot, dropping the
+      // spinner before the DB call resolved and letting the user resubmit
+      // (=> duplicate insert).
+      await onSaved(payload);
+      // Clear form state on success — prevents the saved address from
+      // lingering in the "New address" inputs after a successful save.
+      setGeo(null);
+      setLabel(existing?.label ?? "Home");
+      setMakeDefault(false);
     } finally {
       setSaving(false);
     }

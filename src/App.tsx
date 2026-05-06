@@ -9,6 +9,9 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { MarketplaceDataProvider } from "@/contexts/MarketplaceDataContext";
 import { UserDataProvider } from "@/contexts/UserDataContext";
 import { PartnerDataProvider } from "@/contexts/PartnerDataContext";
+import { WalletProvider } from "@/contexts/WalletContext";
+import { BadgeProvider } from "@/contexts/BadgeContext";
+import { FavoritesProvider } from "@/contexts/FavoritesContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import Onboarding from "./pages/Onboarding.tsx";
@@ -25,11 +28,29 @@ function Spinner() {
   );
 }
 
+/**
+ * Single source of truth for "is auth still resolving?". As long as the
+ * AuthContext's `loading` flag is honoured here, no guard will ever navigate
+ * with stale or in-flight state. `loading` is true while either getSession
+ * is pending OR a SIGNED_IN event triggered a profile refetch.
+ *
+ * We deliberately do NOT block on `profile === null` here — a brand-new user
+ * legitimately has no profile row yet, and that's exactly the case that
+ * should fall through to the onboarding redirect.
+ */
+const useAuthGate = (): React.ReactNode | null => {
+  const { loading } = useAuth();
+  if (loading) return <Spinner />;
+  return null;
+};
+
 // /auth — accessible only when NOT logged in (or not fully onboarded)
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, onboardingStep } = useAuth();
-  if (loading) return <Spinner />;
+  const gate = useAuthGate();
+  const { user, onboardingStep } = useAuth();
+  if (gate) return gate;
   if (user) {
+    console.log("[route] AuthGuard → redirecting", { onboardingStep });
     return onboardingStep === 5
       ? <Navigate to="/" replace />
       : <Navigate to="/onboarding" replace />;
@@ -39,26 +60,35 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 
 // /onboarding — must be logged in AND onboarding incomplete
 const OnboardingGuard = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, onboardingStep } = useAuth();
-  if (loading) return <Spinner />;
+  const gate = useAuthGate();
+  const { user, onboardingStep } = useAuth();
+  if (gate) return gate;
   if (!user) return <Navigate to="/auth" replace />;
-  if (onboardingStep === 5) return <Navigate to="/" replace />;
+  if (onboardingStep === 5) {
+    console.log("[route] OnboardingGuard → already complete, redirect to /");
+    return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
 };
 
 // / — must be logged in AND fully onboarded
 const Protected = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, onboardingStep } = useAuth();
-  if (loading) return <Spinner />;
+  const gate = useAuthGate();
+  const { user, onboardingStep } = useAuth();
+  if (gate) return gate;
   if (!user) return <Navigate to="/auth" replace />;
-  if (onboardingStep < 5) return <Navigate to="/onboarding" replace />;
+  if (onboardingStep < 5) {
+    console.log("[route] Protected → onboarding not complete", { onboardingStep });
+    return <Navigate to="/onboarding" replace />;
+  }
   return <>{children}</>;
 };
 
 // /admin — must be logged in AND have admin role
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, role } = useAuth();
-  if (loading) return <Spinner />;
+  const gate = useAuthGate();
+  const { user, role } = useAuth();
+  if (gate) return gate;
   if (!user) return <Navigate to="/auth" replace />;
   if (role !== "admin") return <Navigate to="/" replace />;
   return <>{children}</>;
@@ -75,6 +105,9 @@ const App = () => (
               <MarketplaceDataProvider>
                 <UserDataProvider>
                   <PartnerDataProvider>
+                    <WalletProvider>
+                    <BadgeProvider>
+                    <FavoritesProvider>
                     <Routes>
                       <Route
                         path="/auth"
@@ -102,6 +135,9 @@ const App = () => (
                       />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
+                    </FavoritesProvider>
+                    </BadgeProvider>
+                    </WalletProvider>
                   </PartnerDataProvider>
                 </UserDataProvider>
               </MarketplaceDataProvider>

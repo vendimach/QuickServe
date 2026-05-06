@@ -1,8 +1,17 @@
-import { ArrowLeft, Star, MapPin, Clock, Zap, CheckCircle2, User } from "lucide-react";
+import { ArrowLeft, Star, MapPin, Clock, Zap, CheckCircle2, User, Heart } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useMarketplaceData } from "@/contexts/MarketplaceDataContext";
+import { useFavorites } from "@/contexts/FavoritesContext";
 import { professionals as allPros } from "@/data/services";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo } from "react";
+import {
+  computeTierProgress,
+  computeReliability,
+  proToTrustInputs,
+} from "@/lib/partnerTrust";
+import { TierChip, ReliabilityPill, BadgeChips } from "./TrustBadges";
+import { cn } from "@/lib/utils";
 
 interface Props {
   bookingId: string;
@@ -10,6 +19,8 @@ interface Props {
 
 export const MatchingList = ({ bookingId }: Props) => {
   const { bookings, navigate, customerConfirmPartner, cancelBooking } = useApp();
+  const { ratingForPro } = useMarketplaceData();
+  const { isFavorite, favoritedByCount } = useFavorites();
   const booking = bookings.find((b) => b.id === bookingId);
 
   // Pre-compute matched pros (interest + availability)
@@ -32,12 +43,20 @@ export const MatchingList = ({ bookingId }: Props) => {
   // For instant: prefer in-memory accepted list (live simulation). If empty
   // (e.g. user navigated away & came back, or page refresh), fall back to the
   // seeded matched pros so the list never disappears once the booking exists.
-  const showList =
+  const rawList =
     booking.type === "instant"
       ? accepted.length > 0
         ? accepted
         : matched
       : matched;
+  // Favorite-first ordering. Favorites surface at the top of the list while
+  // the relative order of non-favorites (already filtered for availability
+  // upstream) is preserved. Plain sort instead of useMemo so we don't break
+  // hook ordering after the early return above.
+  const showList = [
+    ...rawList.filter((p) => isFavorite(p.id)),
+    ...rawList.filter((p) => !isFavorite(p.id)),
+  ];
   const isSearching =
     booking.type === "instant" && accepted.length === 0 && matched.length === 0;
 
@@ -87,20 +106,49 @@ export const MatchingList = ({ bookingId }: Props) => {
         )}
 
         <div className="space-y-3">
-          {showList.map((p) => (
-            <div key={p.id} className="rounded-2xl bg-card p-4 shadow-card animate-fade-in-up">
+          {showList.map((p) => {
+            const { average, count } = ratingForPro(p.id);
+            // Use the dynamic review-based rating where available so tier and
+            // reliability stay consistent with what's shown in the profile.
+            const stats = proToTrustInputs(
+              { jobs: p.jobs, rating: average ?? p.rating },
+              { favoritedByCount: favoritedByCount(p.id) },
+            );
+            const tier = computeTierProgress(stats).current;
+            const reliability = computeReliability(stats);
+            const fav = isFavorite(p.id);
+            return (
+            <div
+              key={p.id}
+              className={cn(
+                "rounded-2xl bg-card p-4 shadow-card animate-fade-in-up",
+                fav && "ring-1 ring-destructive/40",
+              )}
+            >
+              {fav && (
+                <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
+                  <Heart className="h-3 w-3 fill-current" /> Favorite · priority match
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full gradient-primary text-sm font-bold text-primary-foreground">
                   {p.avatar}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-foreground">{p.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-bold text-foreground">{p.name}</p>
+                    <TierChip tier={tier} size="sm" />
+                  </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-0.5">
                       <Star className="h-3 w-3 fill-warning text-warning" />
-                      <span className="font-semibold text-foreground">{p.rating}</span>
+                      <span className="font-semibold text-foreground">
+                        {average != null ? average.toFixed(1) : "New"}
+                      </span>
+                      {count > 0 && <span>({count})</span>}
                     </span>
                     <span>• {p.jobs.toLocaleString()} jobs</span>
+                    <ReliabilityPill score={reliability.score} size="sm" />
                     {p.distance && (
                       <span className="flex items-center gap-0.5">
                         <MapPin className="h-3 w-3 text-primary" /> {p.distance}
@@ -117,6 +165,13 @@ export const MatchingList = ({ bookingId }: Props) => {
                   </span>
                 )}
               </div>
+              <BadgeChips
+                partnerId={p.id}
+                stats={stats}
+                aadhaarVerified
+                max={4}
+                className="mt-2"
+              />
               <button
                 onClick={() => navigate({ name: "partner-profile", partnerId: p.id })}
                 className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-secondary py-1.5 text-[11px] font-semibold text-foreground hover:bg-muted"
@@ -131,7 +186,8 @@ export const MatchingList = ({ bookingId }: Props) => {
                 <CheckCircle2 className="h-4 w-4 mr-1" /> Confirm {p.name.split(" ")[0]}
               </Button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {!isSearching && showList.length === 0 && (

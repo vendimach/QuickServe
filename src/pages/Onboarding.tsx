@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,17 +6,26 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, CheckCircle2, Loader2, Phone, Shield, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Loader2,
+  Phone,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Step progress bar ────────────────────────────────────────────────────────
 const STEP_LABELS = ["Profile", "Verify Phone", "Aadhaar", "Verify Aadhaar"] as const;
+type StepNum = 1 | 2 | 3 | 4;
 
-function StepBar({ current }: { current: 1 | 2 | 3 | 4 }) {
+function StepBar({ current }: { current: StepNum }) {
   return (
     <div className="flex items-start gap-1 mb-6">
       {STEP_LABELS.map((label, i) => {
-        const n = (i + 1) as 1 | 2 | 3 | 4;
+        const n = (i + 1) as StepNum;
         const done = n < current;
         const active = n === current;
         return (
@@ -42,12 +51,12 @@ function StepBar({ current }: { current: 1 | 2 | 3 | 4 }) {
 
 // ─── Step 1: Role + Name + Phone ─────────────────────────────────────────────
 function Step1({ onComplete }: { onComplete: () => Promise<void> }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [role, setRole] = useState<"customer" | "partner">("customer");
   const [name, setName] = useState(
-    (user?.user_metadata?.full_name as string | undefined) ?? "",
+    profile?.full_name ?? (user?.user_metadata?.full_name as string | undefined) ?? "",
   );
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(profile?.mobile ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,23 +67,82 @@ function Step1({ onComplete }: { onComplete: () => Promise<void> }) {
     const cleaned = phone.replace(/\D/g, "");
     if (cleaned.length !== 10) { setError("Enter a valid 10-digit mobile number"); return; }
     setLoading(true);
-    const [{ error: rErr }, { error: pErr }] = await Promise.all([
-      supabase.from("user_roles").upsert(
-        { user_id: user!.id, role },
-        { onConflict: "user_id,role" },
-      ),
-      supabase.from("profiles").upsert({
-        id: user!.id,
-        full_name: name.trim(),
-        mobile: cleaned,
-        mobile_verified: false,
-        aadhaar_verified: false,
-        onboarding_completed: false,
-        accepted_terms: true,
-      }),
-    ]);
+    console.log("[onboarding/step1] submitting", { uid: user!.id, role, hasExistingProfile: !!profile });
+
+    // Build the profile payload carefully — never reset verification flags or
+    // the onboarding flag for a user who already finished onboarding. An
+    // unconditional upsert here would silently drop them back to step 1 the
+    // next time they signed in.
+    const profilePayload: Record<string, unknown> = {
+      id: user!.id,
+      full_name: name.trim(),
+      mobile: cleaned,
+      accepted_terms: true,
+    };
+    if (!profile) {
+      // Brand-new row → seed defaults that the rest of onboarding flips.
+      profilePayload.mobile_verified = false;
+      profilePayload.aadhaar_verified = false;
+      profilePayload.onboarding_completed = false;
+    } else {
+      // Existing row → only mark mobile_verified false if the phone number is
+      // actually changing. Leave aadhaar_verified and onboarding_completed
+      // untouched so a returning user doesn't get demoted.
+      if ((profile.mobile ?? "") !== cleaned) {
+        profilePayload.mobile_verified = false;
+      }
+    }
+
+    // Role save without UPDATE-path RLS dependency:
+    // 1. SELECT the user's existing role rows.
+    // 2. If the requested role already exists → no-op.
+    //    Otherwise INSERT a new row (covered by the existing INSERT policy).
+    // 3. Optionally remove other-role rows so a single user has one role.
+    //    DELETE is now policy-allowed via the new migration; if the migration
+    //    hasn't run yet we simply skip the cleanup and don't fail onboarding.
+    let roleErr: Error | null = null;
+    try {
+      const { data: existingRoles, error: roleSelErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user!.id);
+      if (roleSelErr) throw roleSelErr;
+
+      const has = (existingRoles ?? []).some((r) => r.role === role);
+      if (!has) {
+        console.log("[onboarding/step1] inserting role row", { role });
+        const { error: insErr } = await supabase
+          .from("user_roles")
+          .insert({ user_id: user!.id, role });
+        if (insErr) throw insErr;
+      } else {
+        console.log("[onboarding/step1] role already present — no insert needed");
+      }
+
+      // Best-effort cleanup of any other-role rows. Don't surface failures —
+      // a successful primary role assignment is what onboarding cares about.
+      const stale = (existingRoles ?? []).filter((r) => r.role !== role);
+      if (stale.length > 0) {
+        const { error: delErr } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", user!.id)
+          .neq("role", role);
+        if (delErr) {
+          console.warn("[onboarding/step1] could not clean up stale roles (non-fatal)", delErr);
+        }
+      }
+    } catch (e) {
+      roleErr = e instanceof Error ? e : new Error(String(e));
+      console.error("[onboarding/step1] role save failed", roleErr);
+    }
+
+    const { error: pErr } = await supabase.from("profiles").upsert(profilePayload);
     setLoading(false);
-    if (rErr || pErr) { setError(rErr?.message ?? pErr?.message ?? "Failed to save. Please retry."); return; }
+    if (roleErr || pErr) {
+      setError(roleErr?.message ?? pErr?.message ?? "Failed to save. Please retry.");
+      return;
+    }
     await onComplete();
   };
 
@@ -292,7 +360,25 @@ function Step4({ onComplete }: { onComplete: () => Promise<void> }) {
 // ─── Main Onboarding page ─────────────────────────────────────────────────────
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, loading, onboardingStep, refreshProfile } = useAuth();
+  const { user, loading, onboardingStep, refreshProfile, signOut } = useAuth();
+
+  // Local active step lets the user move BACKWARD even though their saved
+  // profile state has progressed past that step. We never let `activeStep`
+  // exceed `onboardingStep` (you can't skip ahead), but you can revisit
+  // earlier ones.
+  const [activeStep, setActiveStep] = useState<StepNum>(() =>
+    Math.min(onboardingStep, 4) as StepNum,
+  );
+
+  // Keep activeStep in sync when the derived step *advances* (e.g. after the
+  // user completes a step and the profile fetch returns). Don't auto-rewind
+  // when they go back manually.
+  useEffect(() => {
+    setActiveStep((prev) => {
+      const max = Math.min(onboardingStep, 4) as StepNum;
+      return max > prev ? max : prev;
+    });
+  }, [onboardingStep]);
 
   useEffect(() => {
     if (loading) return;
@@ -308,13 +394,41 @@ export default function Onboarding() {
     );
   }
 
+  // Strict guard: do not render the onboarding UI if there's no user OR
+  // onboarding is already complete. This is the same condition the parent
+  // route guard checks, but keeping it here removes any chance of rendering
+  // even one frame of the form during the post-login redirect.
   if (!user || onboardingStep === 5) return null;
 
-  const step = onboardingStep as 1 | 2 | 3 | 4;
+  const handleBack = async () => {
+    if (activeStep > 1) {
+      setActiveStep((s) => (s - 1) as StepNum);
+      return;
+    }
+    // Step 1 → there is no previous onboarding step. Bail out to /auth.
+    // signOut() so we don't leave a half-set-up account in limbo: pressing
+    // Back from step 1 is the user explicitly leaving signup.
+    await signOut();
+    navigate("/auth", { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        <div className="mb-3 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft transition-smooth hover:bg-secondary/60"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {activeStep === 1 ? "Back to sign in" : "Back"}
+          </button>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Step {activeStep} of 4
+          </span>
+        </div>
+
         <div className="text-center mb-6">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary text-primary-foreground shadow-glow mb-3">
             <Sparkles className="h-7 w-7" />
@@ -323,11 +437,11 @@ export default function Onboarding() {
           <p className="text-sm text-muted-foreground">Complete your profile to get started</p>
         </div>
         <Card className="p-6 shadow-card">
-          <StepBar current={step} />
-          {step === 1 && <Step1 onComplete={refreshProfile} />}
-          {step === 2 && <Step2 onComplete={refreshProfile} />}
-          {step === 3 && <Step3 onComplete={refreshProfile} />}
-          {step === 4 && <Step4 onComplete={refreshProfile} />}
+          <StepBar current={activeStep} />
+          {activeStep === 1 && <Step1 onComplete={refreshProfile} />}
+          {activeStep === 2 && <Step2 onComplete={refreshProfile} />}
+          {activeStep === 3 && <Step3 onComplete={refreshProfile} />}
+          {activeStep === 4 && <Step4 onComplete={refreshProfile} />}
         </Card>
       </div>
     </div>

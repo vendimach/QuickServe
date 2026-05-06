@@ -18,13 +18,21 @@ import {
   MessageCircle,
   HelpCircle,
   Gift,
+  Wallet,
+  Heart,
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { usePartnerData } from "@/contexts/PartnerDataContext";
 import { useUserData } from "@/contexts/UserDataContext";
+import { useWallet } from "@/contexts/WalletContext";
+import { useFavorites, FAVORITES_LIMIT } from "@/contexts/FavoritesContext";
+import { useBadges } from "@/contexts/BadgeContext";
 import { cn } from "@/lib/utils";
+import { AvatarBadge } from "./AvatarBadge";
+import { TierProgressCard, BadgeChips } from "./TrustBadges";
 
 export const ProfileView = () => {
   const { role, navigate } = useApp();
@@ -32,9 +40,12 @@ export const ProfileView = () => {
   const { theme, toggleTheme } = useTheme();
   const { push } = useNotifications();
   const { defaultAddress } = useUserData();
+  const { averageRating, jobsCompletedTotal, trustStats } = usePartnerData();
+  const { badgesForPartner } = useBadges();
+  const { balance: walletBalance } = useWallet();
+  const { count: favoritesCount } = useFavorites();
 
   const name = profile?.full_name ?? "Guest";
-  const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
   type Row = {
     icon: typeof User;
@@ -67,12 +78,18 @@ export const ProfileView = () => {
       status: user?.email_confirmed_at ? "verified" : "pending",
       iconColor: "bg-accent/10 text-accent",
     },
-    {
-      icon: Star,
-      label: "Your Rating",
-      value: role === "partner" ? "4.9 ★" : "4.8 ★",
-      iconColor: "bg-warning/15 text-warning",
-    },
+    // Partner-only: real rating computed from completed bookings.
+    // Hidden for customers since customer ratings are not surfaced today.
+    ...(role === "partner"
+      ? [{
+          icon: Star,
+          label: "Your Rating",
+          value: averageRating != null
+            ? `${averageRating.toFixed(1)} ★ • ${jobsCompletedTotal} job${jobsCompletedTotal === 1 ? "" : "s"}`
+            : "No reviews yet",
+          iconColor: "bg-warning/15 text-warning",
+        } as Row]
+      : []),
     {
       icon: User,
       label: "Edit Profile",
@@ -94,6 +111,23 @@ export const ProfileView = () => {
       iconColor: "bg-accent/10 text-accent",
       action: () => navigate({ name: "addresses" }),
     },
+    {
+      icon: Wallet,
+      label: "Wallet",
+      value: `Balance ₹${walletBalance.toLocaleString("en-IN")} • Refunds, referrals & history`,
+      iconColor: "bg-success/15 text-success",
+      action: () => navigate({ name: "wallet" }),
+    },
+    // Favorites is customer-only — partners don't favorite anyone.
+    ...(role === "customer"
+      ? [{
+          icon: Heart,
+          label: "Favorite Partners",
+          value: `${favoritesCount} of ${FAVORITES_LIMIT} • Priority matching & direct booking`,
+          iconColor: "bg-destructive/15 text-destructive",
+          action: () => navigate({ name: "favorites" }),
+        } as Row]
+      : []),
     {
       icon: Info,
       label: "About Us",
@@ -141,9 +175,11 @@ export const ProfileView = () => {
     <div className="space-y-4 px-5 pb-6">
       <div className="rounded-2xl bg-card p-5 shadow-card">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full gradient-primary text-xl font-bold text-primary-foreground shadow-soft">
-            {initials || <User className="h-7 w-7" />}
-          </div>
+          <AvatarBadge
+            src={profile?.avatar_url}
+            name={name}
+            className="h-16 w-16 text-xl shadow-soft"
+          />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold text-foreground">{name}</h2>
             <button
@@ -163,6 +199,35 @@ export const ProfileView = () => {
           </div>
         </div>
       </div>
+
+      {/* Partner trust block — tier progress + earned badges */}
+      {role === "partner" && user && (() => {
+        const stats = trustStats ?? {
+          completedBookings: jobsCompletedTotal,
+          totalBookings: jobsCompletedTotal,
+          partnerCancellations: 0,
+          averageRating,
+          ratedBookings: averageRating != null ? jobsCompletedTotal : 0,
+          responseRatePct: null,
+          punctualityMinutesLate: null,
+          repeatCustomerRatio: null,
+        };
+        const earned = badgesForPartner(user.id, stats, { aadhaarVerified: profile?.aadhaar_verified });
+        return (
+          <div className="space-y-2">
+            <TierProgressCard stats={stats} badgeCount={earned.length} />
+            {earned.length > 0 && (
+              <BadgeChips
+                partnerId={user.id}
+                stats={stats}
+                aadhaarVerified={profile?.aadhaar_verified}
+                size="md"
+                className="px-1"
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Theme toggle row */}
       <button

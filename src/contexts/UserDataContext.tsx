@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 
@@ -49,16 +49,30 @@ export const UserDataProvider = ({ children }: { children: ReactNode }) => {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
 
+  // Track whether addresses have ever been loaded successfully — so background
+  // refreshes (after add/update/delete) don't flash a full-page spinner.
+  const addressesLoadedRef = useRef(false);
+
   const refreshAddresses = useCallback(async () => {
-    if (!user) return setAddresses([]);
-    setLoadingAddresses(true);
+    if (!user) {
+      setAddresses([]);
+      addressesLoadedRef.current = false;
+      return;
+    }
+    // Show the spinner only on the true initial load. Subsequent refreshes
+    // update the list in place with no flash.
+    if (!addressesLoadedRef.current) setLoadingAddresses(true);
     const { data, error } = await supabase
       .from("saved_addresses")
       .select("*")
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: false });
     setLoadingAddresses(false);
-    if (!error && data) setAddresses(data as SavedAddress[]);
+    if (!error && data) {
+      // Replace — never merge — to drop any rows the user just deleted.
+      setAddresses(data as SavedAddress[]);
+      addressesLoadedRef.current = true;
+    }
   }, [user]);
 
   const refreshPayments = useCallback(async () => {
@@ -78,7 +92,13 @@ export const UserDataProvider = ({ children }: { children: ReactNode }) => {
 
   const addAddress: UserDataValue["addAddress"] = async (a) => {
     if (!user) return null;
+    // Auto-default rule: if there is currently no default address (either
+    // because this is the first ever, or every existing one was created
+    // without is_default), the new row must become the default. Caller can
+    // still force is_default=true explicitly.
+    const noExistingDefault = !addresses.some((x) => x.is_default);
     const isFirst = addresses.length === 0;
+    const shouldBeDefault = a.is_default ?? (isFirst || noExistingDefault);
     const { data, error } = await supabase
       .from("saved_addresses")
       .insert({
@@ -90,11 +110,21 @@ export const UserDataProvider = ({ children }: { children: ReactNode }) => {
         pincode: a.pincode ?? null,
         latitude: a.latitude ?? null,
         longitude: a.longitude ?? null,
-        is_default: a.is_default ?? isFirst,
+        is_default: shouldBeDefault,
       })
       .select()
       .single();
     if (error) throw error;
+    // If we just promoted this address to default, demote everyone else so
+    // there's only one default at a time. Done as a separate UPDATE because
+    // we need the new row's id.
+    if (shouldBeDefault && data) {
+      await supabase
+        .from("saved_addresses")
+        .update({ is_default: false })
+        .eq("user_id", user.id)
+        .neq("id", data.id);
+    }
     await refreshAddresses();
     return data as SavedAddress;
   };
@@ -102,12 +132,24 @@ export const UserDataProvider = ({ children }: { children: ReactNode }) => {
   const updateAddress: UserDataValue["updateAddress"] = async (id, patch) => {
     const { error } = await supabase.from("saved_addresses").update(patch).eq("id", id);
     if (error) throw error;
+    // If this update set is_default=true, demote every other row.
+    if (patch.is_default === true && user) {
+      await supabase
+        .from("saved_addresses")
+        .update({ is_default: false })
+        .eq("user_id", user.id)
+        .neq("id", id);
+    }
+    await ensureDefaultExists();
     await refreshAddresses();
   };
 
   const deleteAddress: UserDataValue["deleteAddress"] = async (id) => {
     const { error } = await supabase.from("saved_addresses").delete().eq("id", id);
     if (error) throw error;
+    // After a delete, if the row that was default just disappeared, promote
+    // the oldest remaining address so the user always has a default.
+    await ensureDefaultExists();
     await refreshAddresses();
   };
 
@@ -118,6 +160,29 @@ export const UserDataProvider = ({ children }: { children: ReactNode }) => {
     await supabase.from("saved_addresses").update({ is_default: true }).eq("id", id);
     await refreshAddresses();
   };
+
+  /**
+   * Make sure exactly one address is marked default. Called after add/update/
+   * delete operations so the invariant holds even if the caller forgot to
+   * pass is_default. Cheap when already satisfied (single SELECT).
+   */
+  const ensureDefaultExists = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("saved_addresses")
+      .select("id, is_default, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true });
+    const rows = (data ?? []) as Array<{ id: string; is_default: boolean }>;
+    if (rows.length === 0) return;
+    if (rows.some((r) => r.is_default)) return;
+    // No row has is_default=true → promote the oldest one.
+    const oldest = rows[0];
+    await supabase
+      .from("saved_addresses")
+      .update({ is_default: true })
+      .eq("id", oldest.id);
+  }, [user]);
 
   const addPaymentMethod: UserDataValue["addPaymentMethod"] = async (p) => {
     if (!user) return;

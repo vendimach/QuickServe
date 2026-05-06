@@ -15,6 +15,8 @@ import { PartnerProfile } from "@/components/marketplace/PartnerProfile";
 import { ChatView } from "@/components/marketplace/ChatView";
 import { LiveCam } from "@/components/marketplace/LiveCam";
 import { ReferEarn } from "@/components/marketplace/ReferEarn";
+import { WalletView } from "@/components/marketplace/WalletView";
+import { FavoritesView } from "@/components/marketplace/FavoritesView";
 import { AddressesView } from "@/components/marketplace/AddressesView";
 import { PaymentMethodsView } from "@/components/marketplace/PaymentMethodsView";
 import { EditProfileView } from "@/components/marketplace/EditProfileView";
@@ -73,6 +75,22 @@ const Router = () => {
     return (
       <AppShell title="Refer & Earn" subtitle="Invite friends, earn credits">
         <ReferEarn />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "wallet") {
+    return (
+      <AppShell title="Wallet" subtitle="Balance, refunds & transactions">
+        <WalletView />
+      </AppShell>
+    );
+  }
+
+  if (view.name === "favorites") {
+    return (
+      <AppShell title="Favorite Partners" subtitle="Priority matching & direct requests">
+        <FavoritesView />
       </AppShell>
     );
   }

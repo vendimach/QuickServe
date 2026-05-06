@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
   LayoutDashboard, Package, FolderOpen, BarChart2, Menu, X,
-  ChevronRight, LogOut, Zap,
+  ChevronRight, LogOut, Zap, Award, Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
-type AdminSection = "dashboard" | "services" | "categories" | "analytics";
+type AdminSection = "dashboard" | "services" | "categories" | "analytics" | "partners" | "badges";
 
 interface Props {
   section: AdminSection;
@@ -15,10 +15,12 @@ interface Props {
 }
 
 const NAV = [
-  { id: "dashboard" as const,  label: "Dashboard",   icon: LayoutDashboard },
-  { id: "services"  as const,  label: "Services",    icon: Package },
-  { id: "categories" as const, label: "Categories",  icon: FolderOpen },
-  { id: "analytics" as const,  label: "Analytics",   icon: BarChart2 },
+  { id: "dashboard" as const,  label: "Dashboard",        icon: LayoutDashboard },
+  { id: "partners"  as const,  label: "Partner insights", icon: Users },
+  { id: "badges"    as const,  label: "Badges",           icon: Award },
+  { id: "services"  as const,  label: "Services",         icon: Package },
+  { id: "categories" as const, label: "Categories",       icon: FolderOpen },
+  { id: "analytics" as const,  label: "Analytics",        icon: BarChart2 },
 ];
 
 export const AdminLayout = ({ section, onNavigate, children }: Props) => {
