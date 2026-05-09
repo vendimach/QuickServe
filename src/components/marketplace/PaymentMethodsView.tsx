@@ -11,7 +11,7 @@ const kindIcon = (k: PaymentMethod["kind"]) =>
   k === "card" ? CreditCard : k === "upi" ? Smartphone : k === "wallet" ? Wallet : Banknote;
 
 export const PaymentMethodsView = () => {
-  const { navigate } = useApp();
+  const { goBack } = useApp();
   const { paymentMethods, addPaymentMethod, deletePaymentMethod, setDefaultPayment } = useUserData();
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<PaymentMethod["kind"]>("upi");
@@ -42,7 +42,7 @@ export const PaymentMethodsView = () => {
   return (
     <div className="space-y-3 px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "profile" })}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

@@ -113,3 +113,28 @@ export function finalBilledAmount(args: {
 
 export const EXTENSION_OPTIONS_MIN = [30, 60, 90, 120, 150, 180] as const;
 export type ExtensionOption = (typeof EXTENSION_OPTIONS_MIN)[number];
+
+/**
+ * Return the time window a booking occupies.
+ * - Scheduled: [scheduledAt, scheduledAt + duration]
+ * - Instant (existing accepted): [confirmedAt, confirmedAt + duration]
+ * - Instant (potential new): [now, now + duration]
+ */
+export function bookingWindow(
+  booking: { type: string; scheduledAt?: Date; confirmedAt?: Date; service: { duration: string } },
+  now = new Date(),
+): { start: Date; end: Date } {
+  const mins = parseDurationToMinutes(booking.service.duration, 60);
+  if (booking.type === "scheduled" && booking.scheduledAt) {
+    return { start: booking.scheduledAt, end: new Date(booking.scheduledAt.getTime() + mins * 60_000) };
+  }
+  const start = booking.confirmedAt ?? now;
+  return { start, end: new Date(start.getTime() + mins * 60_000) };
+}
+
+export function windowsOverlap(
+  a: { start: Date; end: Date },
+  b: { start: Date; end: Date },
+): boolean {
+  return a.start < b.end && a.end > b.start;
+}

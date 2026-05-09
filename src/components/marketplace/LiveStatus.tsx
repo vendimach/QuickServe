@@ -399,8 +399,25 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </>
         )}
 
+        {/* For scheduled bookings, hold the OTP form until the scheduled time arrives */}
+        {awaitingOtp && isCustomer && booking.type === "scheduled" && booking.scheduledAt && now < booking.scheduledAt.getTime() - 15 * 60_000 && (
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-card animate-fade-in-up">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <CalendarClock className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Service not started yet</p>
+                <p className="text-[11px] text-muted-foreground">
+                  OTP entry opens at {new Date(booking.scheduledAt.getTime() - 15 * 60_000).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Customer enters OTP from partner to start service */}
-        {awaitingOtp && isCustomer && (
+        {awaitingOtp && isCustomer && (booking.type !== "scheduled" || !booking.scheduledAt || now >= booking.scheduledAt.getTime() - 15 * 60_000) && (
           <form
             onSubmit={submitOtp}
             className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5 shadow-card animate-fade-in-up"

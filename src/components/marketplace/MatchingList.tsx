@@ -18,7 +18,7 @@ interface Props {
 }
 
 export const MatchingList = ({ bookingId }: Props) => {
-  const { bookings, navigate, customerConfirmPartner, cancelBooking } = useApp();
+  const { bookings, navigate, goBack, customerConfirmPartner, cancelBooking } = useApp();
   const { ratingForPro } = useMarketplaceData();
   const { isFavorite, favoritedByCount } = useFavorites();
   const booking = bookings.find((b) => b.id === bookingId);
@@ -63,7 +63,7 @@ export const MatchingList = ({ bookingId }: Props) => {
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "service-detail", serviceId: booking.service.id })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

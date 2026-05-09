@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  ArrowLeft, MapPin, Phone, MessageCircle, Calendar, Zap, Clock,
+  ArrowLeft, MapPin, Phone, MessageCircle, Calendar, CalendarClock, Zap, Clock,
   User as UserIcon, AlertTriangle, XCircle, CheckCircle2, Loader2,
   KeyRound, Copy,
 } from "lucide-react";
@@ -19,6 +19,11 @@ export const PartnerJobView = ({ bookingId }: Props) => {
   const { user } = useAuth();
   const [cancelling, setCancelling] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const realBooking = bookings.find((b) => b.id === bookingId);
 
@@ -87,6 +92,8 @@ export const PartnerJobView = ({ bookingId }: Props) => {
   const isCompleted = status === "completed";
   const isCancelled = status === "cancelled" || status === "refunded";
   const isInstant = job.type === "instant";
+  // OTP is only shareable once the scheduled start time has arrived
+  const otpReady = isInstant || !job.scheduledAt || now >= job.scheduledAt.getTime() - 15 * 60_000;
   const partnerFine = isInProgress ? 200 : 100;
 
   const handleCancel = async () => {
@@ -247,8 +254,25 @@ export const PartnerJobView = ({ bookingId }: Props) => {
         </div>
       </div>
 
+      {/* Before scheduled start time — holding message */}
+      {!isInProgress && !isCompleted && !otpReady && job.scheduledAt && (
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-card animate-fade-in-up">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <CalendarClock className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Service not started yet</p>
+              <p className="text-[11px] text-muted-foreground">
+                OTP will be available at {new Date(job.scheduledAt.getTime() - 15 * 60_000).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* OTP display — shown until customer verifies (status moves to in-progress) */}
-      {!isInProgress && !isCompleted && (
+      {!isInProgress && !isCompleted && otpReady && (
         <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-card">
           <div className="flex items-center gap-2 mb-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">

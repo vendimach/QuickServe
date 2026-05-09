@@ -19,7 +19,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
 ];
 
 export const FaqsView = () => {
-  const { navigate } = useApp();
+  const { goBack } = useApp();
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -40,7 +40,7 @@ export const FaqsView = () => {
   return (
     <div className="space-y-3 px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "profile" })}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

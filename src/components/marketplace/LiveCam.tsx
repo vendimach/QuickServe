@@ -7,7 +7,7 @@ interface Props {
 }
 
 export const LiveCam = ({ bookingId }: Props) => {
-  const { bookings, navigate } = useApp();
+  const { bookings, goBack } = useApp();
   const booking = bookings.find((b) => b.id === bookingId);
   const [muted, setMuted] = useState(true);
   const [camOn, setCamOn] = useState(true);
@@ -17,7 +17,7 @@ export const LiveCam = ({ bookingId }: Props) => {
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "live-status", bookingId })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

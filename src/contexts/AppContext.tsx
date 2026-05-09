@@ -11,6 +11,8 @@ import {
   parseDurationToMinutes,
   finalBilledAmount,
   extensionCost,
+  bookingWindow,
+  windowsOverlap,
 } from "@/lib/bookingTimer";
 
 export type View =
@@ -562,6 +564,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (!target) return { ok: false, reason: "Booking not found" };
 
     const now = new Date();
+
+    // Reject if the new job's window overlaps any confirmed / in-progress booking.
+    const proposed = bookingWindow(target, now);
+    const conflict = bookings
+      .filter((b) => (b.status === "confirmed" || b.status === "in-progress") && b.id !== bookingId)
+      .some((b) => windowsOverlap(proposed, bookingWindow(b, now)));
+    if (conflict) return { ok: false, reason: "You already have a booking during this time window" };
     // Generate OTP here, on accept — never at booking creation.
     // This means the OTP is only ever written by the partner's device and
     // only ever displayed in the partner's job view (not the customer's screen).
@@ -956,6 +965,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Filter the incoming request queue so partners only see jobs that don't
+  // overlap with their already-confirmed / in-progress bookings.
+  const visibleAvailableBookings = useMemo(() => {
+    if (role !== "partner" || availableBookings.length === 0) return availableBookings;
+    const now = new Date();
+    const occupied = bookings
+      .filter((b) => b.status === "confirmed" || b.status === "in-progress")
+      .map((b) => bookingWindow(b, now));
+    if (occupied.length === 0) return availableBookings;
+    return availableBookings.filter((b) => {
+      const proposed = bookingWindow(b, now);
+      return !occupied.some((w) => windowsOverlap(proposed, w));
+    });
+  }, [role, availableBookings, bookings]);
+
   return (
     <AppContext.Provider
       value={{
@@ -964,7 +988,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         navigate,
         goBack,
         bookings,
-        availableBookings,
+        availableBookings: visibleAvailableBookings,
         loadingBookings,
         createBooking,
         partnerAcceptBooking,

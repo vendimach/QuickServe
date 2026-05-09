@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { AddressSelector, type GeoAddress } from "./AddressSelector";
 
 export const AddressesView = () => {
-  const { navigate } = useApp();
+  const { goBack } = useApp();
   const { push } = useNotifications();
   const { addresses, addAddress, deleteAddress, setDefaultAddress, loadingAddresses } = useUserData();
   const [adding, setAdding] = useState(false);
@@ -20,7 +20,7 @@ export const AddressesView = () => {
   return (
     <div className="space-y-3 px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "profile" })}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

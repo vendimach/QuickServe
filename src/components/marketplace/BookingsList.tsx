@@ -309,16 +309,28 @@ export const BookingsList = () => {
                   </div>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
-                {role === "partner" && b.status === "confirmed" && (
-                  <div className="border-t border-border bg-secondary/40 px-4 py-2">
-                    <button
-                      onClick={() => navigate({ name: "partner-otp", bookingId: b.id })}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-primary/15 px-3 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/25"
-                    >
-                      <KeyRound className="h-3 w-3" /> Verify OTP to start service
-                    </button>
-                  </div>
-                )}
+                {role === "partner" && b.status === "confirmed" && (() => {
+                  const notYet = b.type === "scheduled" && !!b.scheduledAt && Date.now() < b.scheduledAt.getTime() - 15 * 60_000;
+                  return (
+                    <div className="border-t border-border bg-secondary/40 px-4 py-2">
+                      <button
+                        disabled={notYet}
+                        onClick={() => !notYet && navigate({ name: "partner-otp", bookingId: b.id })}
+                        className={cn(
+                          "inline-flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold",
+                          notYet
+                            ? "bg-secondary text-muted-foreground cursor-not-allowed"
+                            : "bg-primary/15 text-primary hover:bg-primary/25",
+                        )}
+                      >
+                        <KeyRound className="h-3 w-3" />
+                        {notYet
+                          ? `Starts at ${b.scheduledAt!.toLocaleTimeString("en", { timeStyle: "short" })}`
+                          : "Verify OTP to start service"}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}

@@ -36,7 +36,7 @@ const dateOptions = Array.from({ length: 5 }).map((_, i) => {
 });
 
 export const BookingFlow = ({ serviceId }: Props) => {
-  const { navigate, createBooking } = useApp();
+  const { navigate, goBack, createBooking } = useApp();
   const { preferences } = useMarketplaceData();
   const { addresses, defaultAddress } = useUserData();
   const { favorites } = useFavorites();
@@ -140,7 +140,7 @@ export const BookingFlow = ({ serviceId }: Props) => {
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "service-detail", serviceId: service.id })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back
