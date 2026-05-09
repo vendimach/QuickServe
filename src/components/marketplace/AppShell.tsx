@@ -33,7 +33,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
   ];
 
   const greeting = profile?.full_name?.split(" ")[0] ?? (role === "partner" ? "Partner" : "there");
-  const tabs = role === "customer" ? customerTabs : partnerTabs;
+  const tabs = role === "partner" ? partnerTabs : customerTabs;
   const isHome = view.name === "home" || view.name === "partner-dashboard";
 
   return (
@@ -167,7 +167,7 @@ export const AppShell = ({ children, title, subtitle, showHeader = true }: AppSh
           })}
         </nav>
       </div>
-      <AiAssistant />
+      {view.name !== "chat" && <AiAssistant />}
     </div>
   );
 };

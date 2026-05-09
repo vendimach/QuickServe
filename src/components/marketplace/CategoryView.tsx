@@ -7,7 +7,7 @@ interface Props {
 }
 
 export const CategoryView = ({ categoryId }: Props) => {
-  const { navigate } = useApp();
+  const { navigate, goBack } = useApp();
   const category = categories.find((c) => c.id === categoryId);
   const list = services.filter((s) => s.categoryId === categoryId);
 
@@ -17,7 +17,7 @@ export const CategoryView = ({ categoryId }: Props) => {
     <div>
       <div className="px-5">
         <button
-          onClick={() => navigate({ name: "home" })}
+          onClick={goBack}
           className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft transition-smooth hover:shadow-card"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back

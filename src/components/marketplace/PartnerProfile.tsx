@@ -16,7 +16,7 @@ interface Props {
 }
 
 export const PartnerProfile = ({ partnerId }: Props) => {
-  const { navigate } = useApp();
+  const { navigate, goBack } = useApp();
   const { reviewsForPro, ratingForPro } = useMarketplaceData();
   const { favoritedByCount } = useFavorites();
   const pro = professionals.find((p) => p.id === partnerId);
@@ -35,7 +35,7 @@ export const PartnerProfile = ({ partnerId }: Props) => {
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "bookings" })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

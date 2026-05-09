@@ -40,7 +40,7 @@ interface Props {
 const NO_PROVIDER_TIMEOUT_MS = 5 * 60 * 1000;
 
 export const LiveStatus = ({ bookingId }: Props) => {
-  const { bookings, navigate, completeBooking, cancelBooking, partnerStartService, role } = useApp();
+  const { bookings, navigate, goBack, completeBooking, cancelBooking, partnerStartService, role } = useApp();
   const { ratingForPro } = useMarketplaceData();
   const { favoritedByCount } = useFavorites();
   useAuth();
@@ -110,7 +110,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
     return (
       <div className="px-5 pb-6">
         <button
-          onClick={() => navigate({ name: "bookings" })}
+          onClick={goBack}
           className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
         >
           <X className="h-3.5 w-3.5" /> Close
@@ -238,7 +238,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "bookings" })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <X className="h-3.5 w-3.5" /> Close
@@ -389,21 +389,13 @@ export const LiveStatus = ({ bookingId }: Props) => {
         {/* Active service timer + customer extension panel */}
         {booking.status === "in-progress" && (
           <>
-            <ServiceTimer booking={booking} />
+            <ServiceTimer
+              booking={booking}
+              onAutoComplete={() =>
+                navigate({ name: "booking-summary", bookingId: booking.id }, { replace: true })
+              }
+            />
             {isCustomer && <CustomerExtensionPanel booking={booking} />}
-            {isCustomer && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm("Mark this service as complete now? You'll be billed only for the time used.")) {
-                    completeBooking(booking.id);
-                  }
-                }}
-                className="w-full rounded-2xl border border-success/30 bg-success/5 py-3 text-sm font-bold text-success shadow-soft transition-smooth hover:bg-success/10"
-              >
-                <CheckCircle2 className="mr-1 inline h-4 w-4" /> Mark service complete (early)
-              </button>
-            )}
           </>
         )}
 

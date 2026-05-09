@@ -64,12 +64,16 @@ export function extensionCost(price: number, totalMinutes: number, extensionMinu
 /**
  * Final billed amount given actual elapsed minutes + any accepted extensions.
  *
- *   base portion = price                                if elapsed >= planned
- *                = rate * elapsed                       otherwise (prorated early)
- *   ext portion  = sum of extensionCost(...) for accepted extensions
+ * CASE A — completed before original planned duration ends (elapsed ≤ planned):
+ *   → charge the full original service price only; extension charges are ignored
+ *     regardless of any accepted extensions.
  *
- * The final amount is capped: the base portion can never exceed the original
- * service price even if elapsed > planned (that overflow is the extension).
+ * CASE B — service ran into extension time (elapsed > planned):
+ *   → base portion  = price (full original price)
+ *   → ext portion   = extensionCost for ACTUAL extension minutes used
+ *                     (elapsed − planned), capped at total accepted extension minutes.
+ *
+ * This means extension charges only activate once the original timer has elapsed.
  */
 export function finalBilledAmount(args: {
   price: number;
@@ -82,12 +86,24 @@ export function finalBilledAmount(args: {
   total: number;
 } {
   const { price, plannedMinutes, elapsedMinutes, extensionMinutes } = args;
-  const minutesBilledAtBase = Math.min(Math.max(0, elapsedMinutes), plannedMinutes);
-  const ratio = plannedMinutes > 0 ? minutesBilledAtBase / plannedMinutes : 0;
-  const rawBase = price * ratio;
-  // Cap base portion at the original price. Round to nearest rupee.
-  const basePortion = Math.min(price, Math.round(rawBase));
-  const extensionPortion = extensionCost(price, plannedMinutes, extensionMinutes);
+
+  // Base is always the full original service price.
+  const basePortion = price;
+
+  // Extension charges only apply once the original planned window has passed.
+  let extensionPortion = 0;
+  if (elapsedMinutes > plannedMinutes && extensionMinutes > 0) {
+    // Bill only for the extension time actually used, capped at accepted total.
+    const actualExtensionUsed = Math.min(elapsedMinutes - plannedMinutes, extensionMinutes);
+    extensionPortion = extensionCost(price, plannedMinutes, actualExtensionUsed);
+  }
+
+  console.log("[billing] finalBilledAmount", {
+    price, plannedMinutes, elapsedMinutes, extensionMinutes,
+    basePortion, extensionPortion,
+    note: elapsedMinutes <= plannedMinutes ? "CASE A: completed before original timer" : "CASE B: ran into extension",
+  });
+
   return {
     basePortion,
     extensionPortion,

@@ -7,14 +7,14 @@ interface Props {
 }
 
 export const ServiceDetail = ({ serviceId }: Props) => {
-  const { navigate } = useApp();
+  const { goBack, navigate } = useApp();
   const service = services.find((s) => s.id === serviceId);
   if (!service) return null;
 
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "category", categoryId: service.categoryId })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft transition-smooth"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

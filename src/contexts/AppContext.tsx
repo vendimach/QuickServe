@@ -109,6 +109,8 @@ interface AppContextValue {
   role: Role;
   view: View;
   navigate: (v: View, opts?: { replace?: boolean }) => void;
+  /** Navigate to the previous entry in browser history. Falls back to role home if history is empty. */
+  goBack: () => void;
   bookings: Booking[];
   loadingBookings: boolean;
   createBooking: (
@@ -287,6 +289,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useCallback((v: View, opts?: { replace?: boolean }) => {
     routerNavigate(viewToPath(v), { replace: opts?.replace });
   }, [routerNavigate]);
+
+  const goBack = useCallback(() => {
+    // history.length > 2 means there's a real previous page (1 = the page loaded
+    // directly, 2 = no real back entry). We check window.history directly so we
+    // never navigate back into an unrelated origin.
+    if (window.history.length > 2) {
+      routerNavigate(-1);
+    } else {
+      routerNavigate(role === "partner" ? "/partner" : "/", { replace: true });
+    }
+  }, [routerNavigate, role]);
 
   // Reset view when role changes
   useEffect(() => {
@@ -949,6 +962,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         role,
         view,
         navigate,
+        goBack,
         bookings,
         availableBookings,
         loadingBookings,

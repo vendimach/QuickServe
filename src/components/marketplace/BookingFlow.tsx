@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ArrowLeft, Zap, CalendarClock, MapPin, ChevronRight, Settings2, AlertTriangle, Check, Plus, Search, Heart, MessageSquare } from "lucide-react";
 import { services } from "@/data/services";
 import { useApp } from "@/contexts/AppContext";
@@ -15,7 +15,19 @@ interface Props {
   serviceId: string;
 }
 
-const timeSlots = ["09:00 AM", "11:00 AM", "01:00 PM", "03:00 PM", "05:00 PM", "07:00 PM"];
+// All possible 30-minute slots from 09:00 to 19:00
+const ALL_TIME_SLOTS: string[] = (() => {
+  const slots: string[] = [];
+  for (let h = 9; h <= 19; h++) {
+    for (const min of [0, 30]) {
+      if (h === 19 && min === 30) break;
+      const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      const ampm = h < 12 ? "AM" : "PM";
+      slots.push(`${String(h12).padStart(2, "0")}:${String(min).padStart(2, "0")} ${ampm}`);
+    }
+  }
+  return slots;
+})();
 
 const dateOptions = Array.from({ length: 5 }).map((_, i) => {
   const d = new Date();
@@ -33,7 +45,7 @@ export const BookingFlow = ({ serviceId }: Props) => {
   const service = services.find((s) => s.id === serviceId);
   const [mode, setMode] = useState<"instant" | "scheduled" | null>(null);
   const [date, setDate] = useState<Date>(dateOptions[0]);
-  const [time, setTime] = useState<string>(timeSlots[0]);
+  const [time, setTime] = useState<string>("");
   const [showPrefs, setShowPrefs] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     defaultAddress?.id ?? null,
@@ -41,6 +53,30 @@ export const BookingFlow = ({ serviceId }: Props) => {
   const [addressPickerOpen, setAddressPickerOpen] = useState(false);
   const [addrTab, setAddrTab] = useState<"saved" | "search">("saved");
   const [geoAddress, setGeoAddress] = useState<GeoAddress | null>(null);
+
+  // Filter slots: on today's date hide anything within the next 2 hours.
+  const availableTimeSlots = useMemo(() => {
+    const isToday = date.toDateString() === new Date().toDateString();
+    if (!isToday) return ALL_TIME_SLOTS;
+    const threshold = Date.now() + 2 * 60 * 60 * 1000;
+    return ALL_TIME_SLOTS.filter((slot) => {
+      const [hStr, rest] = slot.split(":");
+      const [mStr, ampm] = rest.split(" ");
+      const h = (parseInt(hStr) % 12) + (ampm === "PM" ? 12 : 0);
+      const slotDate = new Date(date);
+      slotDate.setHours(h, parseInt(mStr), 0, 0);
+      return slotDate.getTime() > threshold;
+    });
+  }, [date]);
+
+  // Reset selected time when available slots change (e.g. date switches to today).
+  useEffect(() => {
+    if (availableTimeSlots.length === 0) {
+      setTime("");
+    } else if (!availableTimeSlots.includes(time)) {
+      setTime(availableTimeSlots[0]);
+    }
+  }, [availableTimeSlots, time]);
 
   // Keep selection in sync if addresses load after first render.
   const selectedSavedAddress = useMemo(() => {
@@ -70,6 +106,7 @@ export const BookingFlow = ({ serviceId }: Props) => {
 
   const handleConfirm = () => {
     if (!mode || !selectedAddress) return;
+    if (mode === "scheduled" && !time) return;
     let scheduledAt: Date | undefined;
     if (mode === "scheduled") {
       const [h, mPart] = time.split(":");
@@ -257,20 +294,26 @@ export const BookingFlow = ({ serviceId }: Props) => {
           </div>
 
           <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">Select time</p>
-          <div className="grid grid-cols-3 gap-2">
-            {timeSlots.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTime(t)}
-                className={cn(
-                  "rounded-xl py-2 text-xs font-semibold transition-smooth",
-                  t === time ? "gradient-primary text-primary-foreground shadow-soft" : "bg-secondary text-foreground hover:bg-muted",
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {availableTimeSlots.length === 0 ? (
+            <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+              No slots available today — please select a future date.
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {availableTimeSlots.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTime(t)}
+                  className={cn(
+                    "rounded-xl py-2 text-xs font-semibold transition-smooth",
+                    t === time ? "gradient-primary text-primary-foreground shadow-soft" : "bg-secondary text-foreground hover:bg-muted",
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -446,11 +489,11 @@ export const BookingFlow = ({ serviceId }: Props) => {
       )}
 
       <button
-        disabled={!mode || !selectedAddress}
+        disabled={!mode || !selectedAddress || (mode === "scheduled" && !time)}
         onClick={handleConfirm}
         className={cn(
           "mt-4 w-full rounded-2xl py-4 text-sm font-bold transition-bounce active:scale-[0.98]",
-          mode && selectedAddress
+          mode && selectedAddress && (mode !== "scheduled" || time)
             ? "gradient-primary text-primary-foreground shadow-elevated hover:-translate-y-0.5"
             : "bg-muted text-muted-foreground cursor-not-allowed",
         )}
@@ -459,9 +502,11 @@ export const BookingFlow = ({ serviceId }: Props) => {
           ? "Choose an option above"
           : !selectedAddress
             ? "Select a service address first"
-            : mode === "instant"
-              ? "Request Service Now"
-              : "Schedule Service"}
+            : mode === "scheduled" && !time
+              ? "No available time slots"
+              : mode === "instant"
+                ? "Request Service Now"
+                : "Schedule Service"}
       </button>
     </div>
   );

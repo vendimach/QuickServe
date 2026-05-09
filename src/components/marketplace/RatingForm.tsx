@@ -13,7 +13,7 @@ interface Props {
 const TAGS = ["Punctual", "Polite", "Caring", "Skilled", "Friendly", "Thorough"];
 
 export const RatingForm = ({ bookingId }: Props) => {
-  const { bookings, navigate, saveRating } = useApp();
+  const { bookings, navigate, goBack, saveRating } = useApp();
   const { addReview } = useMarketplaceData();
   const { profile } = useAuth();
   const { push } = useNotifications();
@@ -67,7 +67,7 @@ export const RatingForm = ({ bookingId }: Props) => {
   return (
     <div className="px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "bookings" })}
+        onClick={goBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back

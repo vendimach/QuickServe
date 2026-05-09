@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   booking: Booking;
+  onAutoComplete?: () => void;
 }
 
 const fmt = (totalMs: number) => {
@@ -34,7 +35,7 @@ const fmt = (totalMs: number) => {
  * fire `completeBooking`; the second call is a harmless no-op because the
  * status check at the call site short-circuits.
  */
-export const ServiceTimer = ({ booking }: Props) => {
+export const ServiceTimer = ({ booking, onAutoComplete }: Props) => {
   const { completeBooking } = useApp();
   const [now, setNow] = useState(Date.now());
   const autoCompletedRef = useRef(false);
@@ -69,7 +70,8 @@ export const ServiceTimer = ({ booking }: Props) => {
     autoCompletedRef.current = true;
     console.log("[booking/timer] auto-complete fired", { bookingId: booking.id, elapsedMinutes });
     completeBooking(booking.id);
-  }, [booking.status, booking.id, overrun, completeBooking, elapsedMinutes]);
+    onAutoComplete?.();
+  }, [booking.status, booking.id, overrun, completeBooking, elapsedMinutes, onAutoComplete]);
 
   return (
     <div className="rounded-3xl gradient-primary p-5 shadow-elevated animate-fade-in-up">

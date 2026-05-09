@@ -13,5 +13,12 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    // PKCE is the recommended flow for SPAs — it prevents token interception via
+    // the URL hash and correctly handles the ?code= callback that Supabase sends
+    // after OAuth. Without this, the default implicit flow stores tokens in the
+    // URL hash, which some browser/proxy environments strip before the JS runs.
+    flowType: "pkce",
+    // Ensure the client detects and exchanges the ?code= in the URL on OAuth return.
+    detectSessionInUrl: true,
   }
 });

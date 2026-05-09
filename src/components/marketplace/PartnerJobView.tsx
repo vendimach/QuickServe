@@ -10,11 +10,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { ServiceTimer, PartnerExtensionPanel } from "./ServiceTimer";
+import { finalBilledAmount, parseDurationToMinutes } from "@/lib/bookingTimer";
 
 interface Props { bookingId: string; }
 
 export const PartnerJobView = ({ bookingId }: Props) => {
-  const { bookings, navigate, cancelBooking, completeBooking } = useApp();
+  const { bookings, navigate, goBack, cancelBooking, completeBooking } = useApp();
   const { user } = useAuth();
   const [cancelling, setCancelling] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -69,7 +70,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
     return (
       <div className="px-5 pb-6">
         <button
-          onClick={() => navigate({ name: "partner-dashboard" })}
+          onClick={goBack}
           className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back
@@ -117,20 +118,19 @@ export const PartnerJobView = ({ bookingId }: Props) => {
     if (!realBooking) return;
     setCompleting(true);
     try {
-      // Compute the prorated amount the same way completeBooking does, but
-      // earlier — so we can record matching earnings. completeBooking will
-      // also persist final_amount to the row; using the same formula here
-      // keeps partner earnings in sync with what the customer is billed.
+      // Compute earnings using the same finalBilledAmount helper that the
+      // customer is billed with, so partner earnings always match customer charge.
       const startedAt = realBooking.startedAt;
-      const planned = realBooking.plannedDurationMinutes ?? 0;
-      const extension = realBooking.extensionMinutes ?? 0;
+      const planned = realBooking.plannedDurationMinutes ?? parseDurationToMinutes(realBooking.service.duration, 60);
       const elapsedMin = startedAt
         ? Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 60_000))
         : 0;
-      const baseRatio = planned > 0 ? Math.min(1, elapsedMin / planned) : 1;
-      const basePortion = Math.round(realBooking.service.price * baseRatio);
-      const extPortion = realBooking.extensionCharges ?? 0;
-      const earnings = Math.min(realBooking.service.price + extension * 1000, basePortion + extPortion);
+      const { total: earnings } = finalBilledAmount({
+        price: realBooking.service.price,
+        plannedMinutes: planned,
+        elapsedMinutes: elapsedMin,
+        extensionMinutes: realBooking.extensionMinutes ?? 0,
+      });
 
       completeBooking(realBooking.id);
       if (user) {
@@ -157,7 +157,7 @@ export const PartnerJobView = ({ bookingId }: Props) => {
           onClick={() => navigate({ name: "partner-dashboard" })}
           className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to dashboard
+          <ArrowLeft className="h-3.5 w-3.5" /> Back
         </button>
         <div className="rounded-3xl bg-card p-6 text-center shadow-card animate-fade-in-up">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
@@ -189,10 +189,10 @@ export const PartnerJobView = ({ bookingId }: Props) => {
   return (
     <div className="space-y-4 px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "partner-dashboard" })}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to dashboard
+        <ArrowLeft className="h-3.5 w-3.5" /> Back
       </button>
 
       {/* Job header card */}
@@ -280,7 +280,33 @@ export const PartnerJobView = ({ bookingId }: Props) => {
       {/* Live service timer + extension panel — only when in-progress */}
       {isInProgress && realBooking && (
         <>
-          <ServiceTimer booking={realBooking} />
+          <ServiceTimer
+            booking={realBooking}
+            onAutoComplete={async () => {
+              const startedAt = realBooking.startedAt;
+              const planned = realBooking.plannedDurationMinutes ?? parseDurationToMinutes(realBooking.service.duration, 60);
+              const elapsedMin = startedAt
+                ? Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 60_000))
+                : 0;
+              const { total: earnings } = finalBilledAmount({
+                price: realBooking.service.price,
+                plannedMinutes: planned,
+                elapsedMinutes: elapsedMin,
+                extensionMinutes: realBooking.extensionMinutes ?? 0,
+              });
+              if (user) {
+                await supabase.from("partner_earnings").insert({
+                  partner_id: user.id,
+                  booking_id: realBooking.id,
+                  service_name: realBooking.service.name,
+                  amount: earnings,
+                  customer_name: null,
+                  earned_at: new Date().toISOString(),
+                });
+              }
+              navigate({ name: "partner-job-complete", bookingId: realBooking.id });
+            }}
+          />
           <PartnerExtensionPanel booking={realBooking} />
         </>
       )}

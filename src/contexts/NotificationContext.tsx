@@ -120,17 +120,29 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
   const push: NotificationContextValue["push"] = useCallback((n) => {
     if (!user) return;
-    // Persist; the realtime INSERT handler will add it to local state.
+    // Add to local state immediately so the UI updates without waiting for
+    // the Supabase realtime echo (which requires the notifications table to
+    // have realtime enabled and may have latency).
+    const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const notification: AppNotification = { id: tempId, ...n, createdAt: new Date(), read: false };
+    seenIdsRef.current.add(tempId);
+    setNotifications((prev) => [notification, ...prev]);
+
     supabase
       .from("notifications")
-      .insert({
-        user_id: user.id,
-        kind: n.kind,
-        title: n.title,
-        body: n.body ?? null,
-      })
-      .then(({ error }) => {
-        if (error) console.error("Failed to persist notification", error);
+      .insert({ user_id: user.id, kind: n.kind, title: n.title, body: n.body ?? null })
+      .select("id")
+      .single()
+      .then(({ data, error }) => {
+        if (error) { console.error("Failed to persist notification", error); return; }
+        if (data?.id) {
+          // Mark real DB id as seen so the realtime echo won't duplicate it,
+          // then swap the temp id for the stable DB uuid.
+          seenIdsRef.current.add(data.id);
+          setNotifications((prev) =>
+            prev.map((no) => (no.id === tempId ? { ...no, id: data.id } : no)),
+          );
+        }
       });
   }, [user]);
 

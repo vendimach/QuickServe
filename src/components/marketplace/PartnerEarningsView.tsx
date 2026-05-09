@@ -4,7 +4,7 @@ import { useApp } from "@/contexts/AppContext";
 import { usePartnerData } from "@/contexts/PartnerDataContext";
 
 export const PartnerEarningsView = () => {
-  const { navigate } = useApp();
+  const { goBack } = useApp();
   const { earnings, refreshEarnings, earningsToday, earningsTotal, jobsCompletedTotal } = usePartnerData();
 
   useEffect(() => {
@@ -14,7 +14,7 @@ export const PartnerEarningsView = () => {
   return (
     <div className="space-y-4 px-5 pb-6">
       <button
-        onClick={() => navigate({ name: "partner-dashboard" })}
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-soft"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back
