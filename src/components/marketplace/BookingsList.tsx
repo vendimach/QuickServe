@@ -326,7 +326,7 @@ export const BookingsList = () => {
                         <KeyRound className="h-3 w-3" />
                         {notYet
                           ? `Starts at ${b.scheduledAt!.toLocaleTimeString("en", { timeStyle: "short" })}`
-                          : "Verify OTP to start service"}
+                          : "Enter customer OTP to start"}
                       </button>
                     </div>
                   );

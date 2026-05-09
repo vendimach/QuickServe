@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   ArrowLeft, MapPin, Phone, MessageCircle, Calendar, CalendarClock, Zap, Clock,
   User as UserIcon, AlertTriangle, XCircle, CheckCircle2, Loader2,
-  KeyRound, Copy,
+  KeyRound,
 } from "lucide-react";
 
 import { useApp } from "@/contexts/AppContext";
@@ -15,11 +15,13 @@ import { finalBilledAmount, parseDurationToMinutes } from "@/lib/bookingTimer";
 interface Props { bookingId: string; }
 
 export const PartnerJobView = ({ bookingId }: Props) => {
-  const { bookings, navigate, goBack, cancelBooking, completeBooking } = useApp();
+  const { bookings, navigate, goBack, cancelBooking, completeBooking, partnerStartService } = useApp();
   const { user } = useAuth();
   const [cancelling, setCancelling] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [otpInput, setOtpInput] = useState("");
+  const [otpError, setOtpError] = useState("");
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
@@ -271,34 +273,52 @@ export const PartnerJobView = ({ bookingId }: Props) => {
         </div>
       )}
 
-      {/* OTP display — shown until customer verifies (status moves to in-progress) */}
+      {/* Partner enters customer's OTP to start service */}
       {!isInProgress && !isCompleted && otpReady && (
-        <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5 shadow-card">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setOtpError("");
+            if (otpInput.length !== 4 || !realBooking) return;
+            const ok = partnerStartService(realBooking.id, otpInput);
+            if (!ok) {
+              setOtpError("Wrong OTP — ask the customer for the correct code.");
+              return;
+            }
+            setOtpInput("");
+          }}
+          className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5 shadow-card"
+        >
           <div className="flex items-center gap-2 mb-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
               <KeyRound className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-bold text-foreground">Share this OTP with the customer</p>
+              <p className="text-sm font-bold text-foreground">Enter customer's OTP</p>
               <p className="text-[11px] text-muted-foreground">
-                Customer enters it on their app to start the service & timer
+                Ask the customer for their 4-digit code to start the service
               </p>
             </div>
           </div>
-          <div className="rounded-2xl bg-card py-5 text-center shadow-soft">
-            <p className="text-5xl font-bold tracking-[0.4em] tabular-nums text-foreground">
-              {realBooking?.startOtp ?? "----"}
-            </p>
-          </div>
+          <input
+            value={otpInput}
+            onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(""); }}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="0000"
+            className={`w-full rounded-xl border bg-card px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-foreground placeholder:text-muted-foreground focus:outline-none ${otpError ? "border-destructive focus:border-destructive" : "border-border focus:border-primary"}`}
+          />
+          {otpError && (
+            <p className="mt-1.5 text-center text-xs font-medium text-destructive">{otpError}</p>
+          )}
           <button
-            onClick={async () => {
-              try { await navigator.clipboard.writeText(realBooking?.startOtp ?? ""); } catch { /* ignore */ }
-            }}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-card py-2.5 text-xs font-bold text-foreground shadow-soft border border-border"
+            type="submit"
+            disabled={otpInput.length !== 4}
+            className="mt-3 w-full rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
           >
-            <Copy className="h-3.5 w-3.5" /> Copy OTP
+            Start service & timer
           </button>
-        </div>
+        </form>
       )}
 
       {/* Live service timer + extension panel — only when in-progress */}

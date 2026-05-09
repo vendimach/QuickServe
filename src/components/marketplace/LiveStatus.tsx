@@ -40,13 +40,10 @@ interface Props {
 const NO_PROVIDER_TIMEOUT_MS = 5 * 60 * 1000;
 
 export const LiveStatus = ({ bookingId }: Props) => {
-  const { bookings, navigate, goBack, completeBooking, cancelBooking, partnerStartService, role } = useApp();
+  const { bookings, navigate, goBack, completeBooking, cancelBooking, role } = useApp();
   const { ratingForPro } = useMarketplaceData();
   const { favoritedByCount } = useFavorites();
   useAuth();
-  const [otpInput, setOtpInput] = useState("");
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
-  const [otpError, setOtpError] = useState("");
   const booking = bookings.find((b) => b.id === bookingId);
   const [now, setNow] = useState(Date.now());
 
@@ -189,20 +186,6 @@ export const LiveStatus = ({ bookingId }: Props) => {
   const awaitingOtp = booking.status === "confirmed";
   const isCustomer = role === "customer";
   const isInstant = booking.type === "instant";
-
-  const submitOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpError("");
-    if (otpInput.length !== 4) return;
-    setVerifyingOtp(true);
-    const ok = partnerStartService(booking.id, otpInput);
-    setVerifyingOtp(false);
-    if (!ok) {
-      setOtpError("Wrong OTP — ask the partner for the correct code.");
-      return;
-    }
-    setOtpInput("");
-  };
 
   // ETA timer countdown (instant bookings only)
   const etaMinutes = parseInt(professional.eta) || 8;
@@ -399,7 +382,7 @@ export const LiveStatus = ({ bookingId }: Props) => {
           </>
         )}
 
-        {/* For scheduled bookings, hold the OTP form until the scheduled time arrives */}
+        {/* For scheduled bookings, hold the OTP display until 15 min before start */}
         {awaitingOtp && isCustomer && booking.type === "scheduled" && booking.scheduledAt && now < booking.scheduledAt.getTime() - 15 * 60_000 && (
           <div className="rounded-3xl border border-border bg-card p-5 shadow-card animate-fade-in-up">
             <div className="flex items-center gap-3">
@@ -409,52 +392,36 @@ export const LiveStatus = ({ bookingId }: Props) => {
               <div>
                 <p className="text-sm font-bold text-foreground">Service not started yet</p>
                 <p className="text-[11px] text-muted-foreground">
-                  OTP entry opens at {new Date(booking.scheduledAt.getTime() - 15 * 60_000).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+                  OTP will be visible at {new Date(booking.scheduledAt.getTime() - 15 * 60_000).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Customer enters OTP from partner to start service */}
+        {/* Customer's OTP — shown to partner who types it in their app to start service */}
         {awaitingOtp && isCustomer && (booking.type !== "scheduled" || !booking.scheduledAt || now >= booking.scheduledAt.getTime() - 15 * 60_000) && (
-          <form
-            onSubmit={submitOtp}
-            className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5 shadow-card animate-fade-in-up"
-          >
-            <div className="flex items-center gap-2">
+          <div className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5 shadow-card animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
                 <KeyRound className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-bold text-foreground">Enter start OTP</p>
+                <p className="text-sm font-bold text-foreground">Share this OTP with your partner</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Ask {professional.name.split(" ")[0]} for the 4-digit code
+                  {professional.name.split(" ")[0]} will enter this code to start the service
                 </p>
               </div>
             </div>
-            <input
-              value={otpInput}
-              onChange={(e) => { setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4)); setOtpError(""); }}
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="0000"
-              className={`mt-4 w-full rounded-xl border bg-card px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-foreground placeholder:text-muted-foreground focus:outline-none ${otpError ? "border-destructive focus:border-destructive" : "border-border focus:border-primary"}`}
-            />
-            {otpError && (
-              <p className="mt-1.5 text-center text-xs font-medium text-destructive">{otpError}</p>
-            )}
-            <button
-              type="submit"
-              disabled={verifyingOtp || otpInput.length !== 4}
-              className="mt-3 w-full rounded-2xl gradient-primary py-3 text-sm font-bold text-primary-foreground shadow-elevated disabled:opacity-60"
-            >
-              {verifyingOtp ? "Verifying…" : "Start service & timer"}
-            </button>
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">
-              Service time will only be calculated after OTP verification.
+            <div className="rounded-2xl bg-card py-5 text-center shadow-soft">
+              <p className="text-5xl font-bold tracking-[0.4em] tabular-nums text-foreground">
+                {booking.startOtp ?? "----"}
+              </p>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              Service timer starts once your partner enters this OTP.
             </p>
-          </form>
+          </div>
         )}
 
         {/* Professional card */}
